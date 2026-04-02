@@ -167,6 +167,12 @@ make clean
 
 The local VS Code syntax extension lives under [vscode-calynda/README.md](/home/codewriter3000/Coding/calynda-lang/vscode-calynda/README.md).
 
+## MCP Server
+
+An [MCP (Model Context Protocol)](mcp-server/README.md) server is included that enables AI assistants to deeply understand and work with Calynda. It provides code analysis, type validation, syntax explanation, code completion, examples, and formatting tools.
+
+See [mcp-server/README.md](mcp-server/README.md) for installation and configuration instructions.
+
 ## Repository Layout
 
 - `src/`: compiler, runtime, backend, and CLI sources
