@@ -255,6 +255,62 @@ static void test_template_literals(void) {
 }
 
 /* ------------------------------------------------------------------ */
+/*  Test: template interpolation with nested braces                   */
+/* ------------------------------------------------------------------ */
+
+static void test_template_interpolation_braces(void) {
+    Tokenizer t;
+    Token tok;
+
+    tokenizer_init(&t, "`x ${(() -> { return 1; })()} y`");
+
+    tok = tokenizer_next(&t);
+    ASSERT_EQ_INT(TOK_TEMPLATE_START, tok.type, "template start with nested braces");
+
+    tok = tokenizer_next(&t);
+    ASSERT_EQ_INT(TOK_LPAREN, tok.type, "grouping lparen");
+
+    tok = tokenizer_next(&t);
+    ASSERT_EQ_INT(TOK_LPAREN, tok.type, "lambda parameter lparen");
+
+    tok = tokenizer_next(&t);
+    ASSERT_EQ_INT(TOK_RPAREN, tok.type, "lambda parameter rparen");
+
+    tok = tokenizer_next(&t);
+    ASSERT_EQ_INT(TOK_ARROW, tok.type, "lambda arrow");
+
+    tok = tokenizer_next(&t);
+    ASSERT_EQ_INT(TOK_LBRACE, tok.type, "lambda body lbrace");
+
+    tok = tokenizer_next(&t);
+    ASSERT_EQ_INT(TOK_RETURN, tok.type, "return keyword in interpolation");
+
+    tok = tokenizer_next(&t);
+    ASSERT_TOKEN(tok, TOK_INT_LIT, "1");
+
+    tok = tokenizer_next(&t);
+    ASSERT_EQ_INT(TOK_SEMICOLON, tok.type, "semicolon in lambda body");
+
+    tok = tokenizer_next(&t);
+    ASSERT_EQ_INT(TOK_RBRACE, tok.type, "lambda body rbrace");
+
+    tok = tokenizer_next(&t);
+    ASSERT_EQ_INT(TOK_RPAREN, tok.type, "grouping rparen");
+
+    tok = tokenizer_next(&t);
+    ASSERT_EQ_INT(TOK_LPAREN, tok.type, "call lparen");
+
+    tok = tokenizer_next(&t);
+    ASSERT_EQ_INT(TOK_RPAREN, tok.type, "call rparen");
+
+    tok = tokenizer_next(&t);
+    ASSERT_EQ_INT(TOK_TEMPLATE_END, tok.type, "template end after nested braces");
+
+    tok = tokenizer_next(&t);
+    ASSERT_EQ_INT(TOK_EOF, tok.type, "EOF after nested-brace template");
+}
+
+/* ------------------------------------------------------------------ */
 /*  Test: operators and punctuation                                   */
 /* ------------------------------------------------------------------ */
 
@@ -426,6 +482,7 @@ int main(void) {
     RUN_TEST(test_char_literals);
     RUN_TEST(test_string_literals);
     RUN_TEST(test_template_literals);
+    RUN_TEST(test_template_interpolation_braces);
     RUN_TEST(test_operators);
     RUN_TEST(test_comments);
     RUN_TEST(test_positions);

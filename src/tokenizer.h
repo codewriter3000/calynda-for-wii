@@ -4,6 +4,8 @@
 #include <stddef.h>
 #include <stdint.h>
 
+#define TOKENIZER_MAX_TEMPLATE_DEPTH 32
+
 /* ------------------------------------------------------------------ */
 /*  Token types                                                       */
 /* ------------------------------------------------------------------ */
@@ -144,6 +146,7 @@ typedef struct {
     int         line;
     int         column;
     int         template_depth;   /* nesting depth of template literals */
+    int         interpolation_brace_depth[TOKENIZER_MAX_TEMPLATE_DEPTH];
 } Tokenizer;
 
 /* ------------------------------------------------------------------ */

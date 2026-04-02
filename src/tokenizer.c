@@ -50,6 +50,7 @@ static Token make_token(const Tokenizer *t, TokenType type,
 static Token error_token(const Tokenizer *t, const char *msg,
                          int line, int col) {
     Token tok;
+    (void)t;
     tok.type   = TOK_ERROR;
     tok.start  = msg;
     tok.length = strlen(msg);
@@ -322,8 +323,12 @@ static Token scan_template_body(Tokenizer *t, const char *start,
         }
         if (peek(t) == '$' && peek_next(t) == '{') {
             Token tok = make_token(t, on_interp, start, line, col);
+            if (t->template_depth >= TOKENIZER_MAX_TEMPLATE_DEPTH)
+                return error_token(t, "Template interpolation nesting too deep",
+                                   line, col);
             advance(t); /* $ */
             advance(t); /* { */
+            t->interpolation_brace_depth[t->template_depth] = 0;
             t->template_depth++;
             return tok;
         }
@@ -341,9 +346,14 @@ static Token scan_template_body(Tokenizer *t, const char *start,
 /* ------------------------------------------------------------------ */
 
 Token tokenizer_next(Tokenizer *t) {
-    /* If we're inside a template interpolation and see }, resume the
-       template body scanning. */
-    if (t->template_depth > 0 && peek(t) == '}') {
+    skip_whitespace(t);
+
+    /* If we're inside a template interpolation and see the matching },
+       resume template body scanning. Nested braces inside the
+       interpolation are tracked separately per template depth. */
+    if (t->template_depth > 0 &&
+        t->interpolation_brace_depth[t->template_depth - 1] == 0 &&
+        peek(t) == '}') {
         const char *start = t->current;
         int line = t->line, col = t->column;
         advance(t); /* consume } */
@@ -351,8 +361,6 @@ Token tokenizer_next(Tokenizer *t) {
         return scan_template_body(t, start, line, col,
                                   TOK_TEMPLATE_MIDDLE, TOK_TEMPLATE_END);
     }
-
-    skip_whitespace(t);
 
     if (is_at_end(t)) {
         return make_token(t, TOK_EOF, t->current, t->line, t->column);
@@ -375,8 +383,16 @@ Token tokenizer_next(Tokenizer *t) {
     /* Single-character punctuation */
     case '(': return make_token(t, TOK_LPAREN,    start, line, col);
     case ')': return make_token(t, TOK_RPAREN,    start, line, col);
-    case '{': return make_token(t, TOK_LBRACE,    start, line, col);
-    case '}': return make_token(t, TOK_RBRACE,    start, line, col);
+    case '{':
+        if (t->template_depth > 0)
+            t->interpolation_brace_depth[t->template_depth - 1]++;
+        return make_token(t, TOK_LBRACE,    start, line, col);
+    case '}':
+        if (t->template_depth > 0 &&
+            t->interpolation_brace_depth[t->template_depth - 1] > 0) {
+            t->interpolation_brace_depth[t->template_depth - 1]--;
+        }
+        return make_token(t, TOK_RBRACE,    start, line, col);
     case '[': return make_token(t, TOK_LBRACKET,  start, line, col);
     case ']': return make_token(t, TOK_RBRACKET,  start, line, col);
     case ';': return make_token(t, TOK_SEMICOLON, start, line, col);
@@ -495,6 +511,8 @@ void tokenizer_init(Tokenizer *t, const char *source) {
     t->line           = 1;
     t->column         = 1;
     t->template_depth = 0;
+    memset(t->interpolation_brace_depth, 0,
+           sizeof(t->interpolation_brace_depth));
 }
 
 /* ------------------------------------------------------------------ */
