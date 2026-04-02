@@ -1,0 +1,351 @@
+{
+  "$schema": "https://raw.githubusercontent.com/martinring/tmlanguage/master/tmlanguage.json",
+  "name": "Calynda",
+  "scopeName": "source.calynda",
+  "patterns": [
+    {
+      "include": "#comments"
+    },
+    {
+      "include": "#template-literal"
+    },
+    {
+      "include": "#strings"
+    },
+    {
+      "include": "#numbers"
+    },
+    {
+      "include": "#keywords"
+    },
+    {
+      "include": "#types"
+    },
+    {
+      "include": "#constants"
+    },
+    {
+      "include": "#declarations"
+    },
+    {
+      "include": "#identifiers"
+    },
+    {
+      "include": "#operators"
+    },
+    {
+      "include": "#punctuation"
+    }
+  ],
+  "repository": {
+    "comments": {
+      "patterns": [
+        {
+          "name": "comment.line.double-slash.calynda",
+          "begin": "//",
+          "beginCaptures": {
+            "0": {
+              "name": "punctuation.definition.comment.calynda"
+            }
+          },
+          "end": "$"
+        },
+        {
+          "name": "comment.block.calynda",
+          "begin": "/\\*",
+          "beginCaptures": {
+            "0": {
+              "name": "punctuation.definition.comment.begin.calynda"
+            }
+          },
+          "end": "\\*/",
+          "endCaptures": {
+            "0": {
+              "name": "punctuation.definition.comment.end.calynda"
+            }
+          }
+        }
+      ]
+    },
+    "strings": {
+      "patterns": [
+        {
+          "name": "string.quoted.double.calynda",
+          "begin": "\"",
+          "beginCaptures": {
+            "0": {
+              "name": "punctuation.definition.string.begin.calynda"
+            }
+          },
+          "end": "\"",
+          "endCaptures": {
+            "0": {
+              "name": "punctuation.definition.string.end.calynda"
+            }
+          },
+          "patterns": [
+            {
+              "include": "#escape-sequences"
+            }
+          ]
+        },
+        {
+          "name": "string.quoted.single.calynda",
+          "begin": "'",
+          "beginCaptures": {
+            "0": {
+              "name": "punctuation.definition.char.begin.calynda"
+            }
+          },
+          "end": "'",
+          "endCaptures": {
+            "0": {
+              "name": "punctuation.definition.char.end.calynda"
+            }
+          },
+          "patterns": [
+            {
+              "include": "#escape-sequences"
+            }
+          ]
+        }
+      ]
+    },
+    "template-literal": {
+      "name": "string.quoted.template.calynda",
+      "begin": "`",
+      "beginCaptures": {
+        "0": {
+          "name": "punctuation.definition.string.template.begin.calynda"
+        }
+      },
+      "end": "`",
+      "endCaptures": {
+        "0": {
+          "name": "punctuation.definition.string.template.end.calynda"
+        }
+      },
+      "patterns": [
+        {
+          "include": "#escape-sequences"
+        },
+        {
+          "name": "meta.interpolation.calynda",
+          "begin": "\\$\\{",
+          "beginCaptures": {
+            "0": {
+              "name": "punctuation.section.interpolation.begin.calynda"
+            }
+          },
+          "end": "\\}",
+          "endCaptures": {
+            "0": {
+              "name": "punctuation.section.interpolation.end.calynda"
+            }
+          },
+          "patterns": [
+            {
+              "include": "#comments"
+            },
+            {
+              "include": "#template-literal"
+            },
+            {
+              "include": "#strings"
+            },
+            {
+              "include": "#numbers"
+            },
+            {
+              "include": "#keywords"
+            },
+            {
+              "include": "#types"
+            },
+            {
+              "include": "#constants"
+            },
+            {
+              "include": "#declarations"
+            },
+            {
+              "include": "#identifiers"
+            },
+            {
+              "include": "#operators"
+            },
+            {
+              "include": "#punctuation"
+            }
+          ]
+        }
+      ]
+    },
+    "escape-sequences": {
+      "patterns": [
+        {
+          "name": "constant.character.escape.calynda",
+          "match": "\\\\(?:[ntr\\\\'\"`$0]|u[0-9A-Fa-f]{4})"
+        }
+      ]
+    },
+    "numbers": {
+      "patterns": [
+        {
+          "name": "constant.numeric.float.calynda",
+          "match": "\\b(?:\\d+\\.\\d+(?:[eE][+-]?\\d+)?|\\d+[eE][+-]?\\d+)\\b"
+        },
+        {
+          "name": "constant.numeric.integer.binary.calynda",
+          "match": "\\b0[bB][01]+\\b"
+        },
+        {
+          "name": "constant.numeric.integer.octal.calynda",
+          "match": "\\b0[oO][0-7]+\\b"
+        },
+        {
+          "name": "constant.numeric.integer.hex.calynda",
+          "match": "\\b0[xX][0-9A-Fa-f]+\\b"
+        },
+        {
+          "name": "constant.numeric.integer.decimal.calynda",
+          "match": "\\b(?:0|[1-9]\\d*)\\b"
+        }
+      ]
+    },
+    "keywords": {
+      "patterns": [
+        {
+          "name": "keyword.control.calynda",
+          "match": "\\b(?:package|import|start|return|exit|throw)\\b"
+        },
+        {
+          "name": "storage.modifier.calynda",
+          "match": "\\b(?:public|private|final|var)\\b"
+        }
+      ]
+    },
+    "types": {
+      "patterns": [
+        {
+          "name": "storage.type.primitive.calynda",
+          "match": "\\b(?:void|int8|int16|int32|int64|uint8|uint16|uint32|uint64|float32|float64|bool|char|string)\\b"
+        }
+      ]
+    },
+    "constants": {
+      "patterns": [
+        {
+          "name": "constant.language.boolean.calynda",
+          "match": "\\b(?:true|false)\\b"
+        },
+        {
+          "name": "constant.language.null.calynda",
+          "match": "\\bnull\\b"
+        }
+      ]
+    },
+    "declarations": {
+      "patterns": [
+        {
+          "name": "entity.name.function.start.calynda",
+          "match": "\\b(start)(?=\\s*\\()"
+        },
+        {
+          "name": "entity.name.type.package.calynda",
+          "match": "(?<=\\bpackage\\s)[A-Za-z_][A-Za-z0-9_]*(?:\\.[A-Za-z_][A-Za-z0-9_]*)*"
+        },
+        {
+          "name": "entity.name.namespace.import.calynda",
+          "match": "(?<=\\bimport\\s)[A-Za-z_][A-Za-z0-9_]*(?:\\.[A-Za-z_][A-Za-z0-9_]*)*"
+        },
+        {
+          "captures": {
+            "1": {
+              "name": "storage.type.primitive.calynda"
+            },
+            "2": {
+              "name": "entity.name.variable.calynda"
+            }
+          },
+          "match": "\\b(void|int8|int16|int32|int64|uint8|uint16|uint32|uint64|float32|float64|bool|char|string|var)\\b(?:\\s*\\[[^\\]\\r\\n]*\\])*\\s+([A-Za-z_][A-Za-z0-9_]*)\\s*(?==)"
+        },
+        {
+          "captures": {
+            "1": {
+              "name": "storage.type.primitive.calynda"
+            },
+            "2": {
+              "name": "variable.parameter.calynda"
+            }
+          },
+          "match": "(?<=\\(|,)\\s*((?:void|int8|int16|int32|int64|uint8|uint16|uint32|uint64|float32|float64|bool|char|string)(?:\\s*\\[[^\\]\\r\\n]*\\])*)\\s+([A-Za-z_][A-Za-z0-9_]*)"
+        }
+      ]
+    },
+    "identifiers": {
+      "patterns": [
+        {
+          "name": "variable.other.calynda",
+          "match": "\\b[A-Za-z_][A-Za-z0-9_]*\\b"
+        }
+      ]
+    },
+    "operators": {
+      "patterns": [
+        {
+          "name": "keyword.operator.assignment.calynda",
+          "match": "(?:<<=|>>=|\\+=|-=|\\*=|/=|%=|&=|\\|=|\\^=|=)"
+        },
+        {
+          "name": "keyword.operator.arrow.calynda",
+          "match": "->"
+        },
+        {
+          "name": "keyword.operator.logical.calynda",
+          "match": "(?:\\|\\||&&|!)"
+        },
+        {
+          "name": "keyword.operator.comparison.calynda",
+          "match": "(?:==|!=|<=|>=|<|>)"
+        },
+        {
+          "name": "keyword.operator.bitwise.calynda",
+          "match": "(?:~&|~\\^|<<|>>|\\||&|\\^|~)"
+        },
+        {
+          "name": "keyword.operator.arithmetic.calynda",
+          "match": "(?:\\+|-|\\*|/|%)"
+        },
+        {
+          "name": "keyword.operator.ternary.calynda",
+          "match": "[?:]"
+        }
+      ]
+    },
+    "punctuation": {
+      "patterns": [
+        {
+          "name": "punctuation.separator.comma.calynda",
+          "match": ","
+        },
+        {
+          "name": "punctuation.terminator.statement.calynda",
+          "match": ";"
+        },
+        {
+          "name": "punctuation.accessor.calynda",
+          "match": "\\."
+        },
+        {
+          "name": "punctuation.section.group.begin.calynda",
+          "match": "(?:\\(|\\{|\\[)"
+        },
+        {
+          "name": "punctuation.section.group.end.calynda",
+          "match": "(?:\\)|\\}|\\])"
+        }
+      ]
+    }
+  }
+}

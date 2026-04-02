@@ -1,0 +1,42 @@
+{
+  "name": "calynda-syntax",
+  "displayName": "Calynda Syntax",
+  "description": "Syntax highlighting and basic language configuration for Calynda files.",
+  "version": "0.1.0",
+  "publisher": "local",
+  "license": "UNLICENSED",
+  "engines": {
+    "vscode": "^1.85.0"
+  },
+  "categories": [
+    "Programming Languages"
+  ],
+  "keywords": [
+    "calynda",
+    "syntax",
+    "highlighting",
+    "language"
+  ],
+  "contributes": {
+    "languages": [
+      {
+        "id": "calynda",
+        "aliases": [
+          "Calynda",
+          "calynda"
+        ],
+        "extensions": [
+          ".cal"
+        ],
+        "configuration": "./language-configuration.json"
+      }
+    ],
+    "grammars": [
+      {
+        "language": "calynda",
+        "scopeName": "source.calynda",
+        "path": "./syntaxes/calynda.tmLanguage.json"
+      }
+    ]
+  }
+}
