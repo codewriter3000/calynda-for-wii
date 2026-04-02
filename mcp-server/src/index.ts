@@ -31,69 +31,69 @@ const server = new Server(
 server.setRequestHandler(ListToolsRequestSchema, async () => ({
   tools: [
     {
-      name: 'calynda_validate',
-      description: 'Validate Calynda source code for syntax and semantic errors',
+      name: 'analyze_calynda_code',
+      description: 'Analyze Calynda source code for syntax errors, type issues, and provide suggestions',
       inputSchema: {
         type: 'object' as const,
         properties: {
-          code: { type: 'string', description: 'The Calynda source code to validate' },
+          code: { type: 'string', description: 'The Calynda source code to analyze' },
           filename: { type: 'string', description: 'Optional filename for better diagnostics' },
         },
         required: ['code'],
       },
     },
     {
-      name: 'calynda_analyze',
-      description: 'Analyze Calynda source code and return AST and symbol information',
+      name: 'explain_calynda_syntax',
+      description: 'Explain Calynda language features and syntax',
       inputSchema: {
         type: 'object' as const,
         properties: {
-          code: { type: 'string', description: 'The Calynda source code to analyze' },
-        },
-        required: ['code'],
-      },
-    },
-    {
-      name: 'calynda_explain',
-      description: 'Explain a Calynda language feature, keyword, or type',
-      inputSchema: {
-        type: 'object' as const,
-        properties: {
-          topic: { type: 'string', description: 'The topic to explain (e.g., "int32", "lambda", "template literal")' },
+          topic: { type: 'string', description: 'The feature name or code snippet to explain (e.g., "int32", "lambda", "template literal")' },
         },
         required: ['topic'],
       },
     },
     {
-      name: 'calynda_complete',
-      description: 'Get code completion suggestions at a cursor position',
+      name: 'complete_calynda_code',
+      description: 'Provide context-aware code completions',
       inputSchema: {
         type: 'object' as const,
         properties: {
-          code: { type: 'string', description: 'The Calynda source code' },
+          code: { type: 'string', description: 'The Calynda source code context' },
           cursorOffset: { type: 'number', description: 'The cursor position (character offset)' },
         },
         required: ['code', 'cursorOffset'],
       },
     },
     {
-      name: 'calynda_examples',
-      description: 'Search for Calynda code examples by tags or query',
+      name: 'validate_calynda_types',
+      description: 'Type check Calynda code and return type information and errors',
       inputSchema: {
         type: 'object' as const,
         properties: {
+          code: { type: 'string', description: 'The Calynda source code to type-check' },
+        },
+        required: ['code'],
+      },
+    },
+    {
+      name: 'get_calynda_examples',
+      description: 'Get example code for specific Calynda features or patterns',
+      inputSchema: {
+        type: 'object' as const,
+        properties: {
+          feature: { type: 'string', description: 'Feature or pattern name to get examples for' },
           tags: { type: 'array', items: { type: 'string' }, description: 'Filter by tags' },
-          query: { type: 'string', description: 'Search query' },
         },
       },
     },
     {
-      name: 'calynda_format',
-      description: 'Format Calynda source code',
+      name: 'format_calynda_code',
+      description: 'Format Calynda code according to language conventions',
       inputSchema: {
         type: 'object' as const,
         properties: {
-          code: { type: 'string', description: 'The Calynda source code to format' },
+          code: { type: 'string', description: 'The unformatted Calynda source code' },
         },
         required: ['code'],
       },
@@ -106,17 +106,12 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
 
   try {
     switch (name) {
-      case 'calynda_validate': {
+      case 'analyze_calynda_code': {
         const a = args as Record<string, unknown>;
         const result = validateCode({ code: a['code'] as string, filename: a['filename'] as string | undefined });
         return { content: [{ type: 'text' as const, text: JSON.stringify(result, null, 2) }] };
       }
-      case 'calynda_analyze': {
-        const a = args as Record<string, unknown>;
-        const result = analyzeCode({ code: a['code'] as string });
-        return { content: [{ type: 'text' as const, text: JSON.stringify(result, null, 2) }] };
-      }
-      case 'calynda_explain': {
+      case 'explain_calynda_syntax': {
         const a = args as Record<string, unknown>;
         const result = explainTopic({ topic: a['topic'] as string });
         let text = result.explanation;
@@ -125,18 +120,23 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         }
         return { content: [{ type: 'text' as const, text }] };
       }
-      case 'calynda_complete': {
+      case 'complete_calynda_code': {
         const a = args as Record<string, unknown>;
         const result = getCompletions({ code: a['code'] as string, cursorOffset: a['cursorOffset'] as number });
         return { content: [{ type: 'text' as const, text: JSON.stringify(result, null, 2) }] };
       }
-      case 'calynda_examples': {
+      case 'validate_calynda_types': {
         const a = args as Record<string, unknown>;
-        const result = searchExamples({ tags: a['tags'] as string[] | undefined, query: a['query'] as string | undefined });
+        const result = analyzeCode({ code: a['code'] as string });
+        return { content: [{ type: 'text' as const, text: JSON.stringify(result, null, 2) }] };
+      }
+      case 'get_calynda_examples': {
+        const a = args as Record<string, unknown>;
+        const result = searchExamples({ tags: a['tags'] as string[] | undefined, query: a['feature'] as string | undefined });
         const text = result.examples.map(e => `### ${e.name}\n${e.description}\n\`\`\`cal\n${e.code}\n\`\`\``).join('\n\n');
         return { content: [{ type: 'text' as const, text: `Found ${result.total} examples:\n\n${text}` }] };
       }
-      case 'calynda_format': {
+      case 'format_calynda_code': {
         const a = args as Record<string, unknown>;
         const result = formatCode({ code: a['code'] as string });
         return { content: [{ type: 'text' as const, text: result.formatted }] };
