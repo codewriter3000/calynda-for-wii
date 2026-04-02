@@ -1,6 +1,6 @@
 import * as AST from '../parser/ast';
 import { Diagnostic } from './diagnostics';
-import { CalyndaType, typeToString } from './types';
+import { CalyndaType, PrimitiveCalyndaType, typeToString } from './types';
 
 export interface AnalysisResult {
   diagnostics: Diagnostic[];
@@ -58,7 +58,7 @@ class SemanticAnalyzer {
   private typeFromAnnotation(ann: AST.TypeNode | 'var'): CalyndaType {
     if (ann === 'var') return { kind: 'unknown' };
     switch (ann.kind) {
-      case 'PrimitiveType': return { kind: 'primitive', name: ann.name as CalyndaType extends { kind: 'primitive'; name: infer N } ? N : never };
+      case 'PrimitiveType': return { kind: 'primitive', name: ann.name as PrimitiveCalyndaType['name'] };
       case 'VoidType': return { kind: 'void' };
       case 'ArrayType': return { kind: 'array', elementType: this.typeFromAnnotation(ann.elementType) };
     }
@@ -170,7 +170,7 @@ class SemanticAnalyzer {
         return { kind: 'unknown' };
       case 'CastExpression':
         this.analyzeExpression(expr.value);
-        return { kind: 'primitive', name: expr.targetType as Parameters<typeof typeToString>[0] extends { kind: 'primitive'; name: infer N } ? N : never };
+        return { kind: 'primitive', name: expr.targetType as PrimitiveCalyndaType['name'] };
       case 'LambdaExpression': {
         this.pushScope();
         const paramTypes: CalyndaType[] = [];

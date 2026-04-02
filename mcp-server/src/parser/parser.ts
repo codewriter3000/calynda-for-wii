@@ -617,7 +617,7 @@ class Parser {
     if (tok.type === 'keyword' && tok.value === 'throw') {
       this.advance();
       const value = this.parseExpression();
-      return { kind: 'UnaryExpression', operator: 'throw', operand: value, start: startPos, end: this.position() } as AST.UnaryExpression;
+      return { kind: 'UnaryExpression', operator: 'throw', operand: value, start: startPos, end: this.position() };
     }
 
     throw new ParseError(`Unexpected token '${tok.value}' (${tok.type})`, tok.line, tok.column);
