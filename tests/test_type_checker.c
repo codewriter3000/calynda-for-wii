@@ -322,6 +322,43 @@ static void test_type_checker_rejects_bad_start_return_type(void) {
     parser_free(&parser);
 }
 
+static void test_type_checker_rejects_void_zero_arg_callable_in_template(void) {
+    const char *source =
+        "start(string[] args) -> {\n"
+        "    var message = `${() -> { exit; }}`;\n"
+        "    return 0;\n"
+        "};\n";
+    Parser parser;
+    AstProgram program;
+    SymbolTable symbols;
+    TypeChecker checker;
+    const TypeCheckError *error;
+    char diagnostic_buffer[256];
+    char *diagnostic = diagnostic_buffer;
+
+    symbol_table_init(&symbols);
+    type_checker_init(&checker);
+    parser_init(&parser, source);
+    REQUIRE_TRUE(parser_parse_program(&parser, &program), "parse void template callable program");
+    REQUIRE_TRUE(symbol_table_build(&symbols, &program), "build symbols for void template callable");
+    ASSERT_TRUE(!type_checker_check_program(&checker, &program, &symbols),
+                "void zero-arg callable in template fails type checking");
+
+    error = type_checker_get_error(&checker);
+    REQUIRE_TRUE(error != NULL, "void template callable error exists");
+    REQUIRE_TRUE(type_checker_format_error(error, diagnostic, sizeof(diagnostic_buffer)),
+                 "format void template callable error");
+    ASSERT_EQ_STR(
+        "2:22: Template interpolation cannot auto-call a zero-argument callable returning void.",
+        diagnostic,
+        "formatted void template callable diagnostic");
+
+    type_checker_free(&checker);
+    symbol_table_free(&symbols);
+    ast_program_free(&program);
+    parser_free(&parser);
+}
+
 static void test_type_checker_reports_type_resolution_errors(void) {
     const char *source = "start(void args) -> 0;\n";
     Parser parser;
@@ -755,6 +792,7 @@ int main(void) {
     RUN_TEST(test_type_checker_rejects_non_bool_ternary_condition);
     RUN_TEST(test_type_checker_rejects_void_lambda_body_for_typed_binding);
     RUN_TEST(test_type_checker_rejects_bad_start_return_type);
+    RUN_TEST(test_type_checker_rejects_void_zero_arg_callable_in_template);
     RUN_TEST(test_type_checker_reports_type_resolution_errors);
     RUN_TEST(test_type_checker_requires_start_entry_point);
     RUN_TEST(test_type_checker_rejects_duplicate_start_entry_points);

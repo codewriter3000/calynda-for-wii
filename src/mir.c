@@ -192,6 +192,9 @@ static bool lower_short_circuit_binary_expression(MirUnitBuildContext *context,
 static bool lower_assignment_expression(MirUnitBuildContext *context,
                                         const HirExpression *expression,
                                         MirValue *value);
+static bool lower_template_part_value(MirUnitBuildContext *context,
+                                      const HirExpression *expression,
+                                      MirValue *value);
 static bool lower_template_expression(MirUnitBuildContext *context,
                                       const HirExpression *expression,
                                       MirValue *value);
@@ -1932,6 +1935,57 @@ static bool lower_assignment_expression(MirUnitBuildContext *context,
     return true;
 }
 
+static bool lower_template_part_value(MirUnitBuildContext *context,
+                                      const HirExpression *expression,
+                                      MirValue *value) {
+    MirInstruction instruction;
+
+    if (!context || !expression || !value) {
+        return false;
+    }
+
+    if (!expression->is_callable || expression->callable_signature.parameter_count != 0) {
+        return lower_expression(context, expression, value);
+    }
+
+    memset(&instruction, 0, sizeof(instruction));
+    instruction.kind = MIR_INSTR_CALL;
+    if (!lower_expression(context, expression, &instruction.as.call.callee)) {
+        return false;
+    }
+    instruction.as.call.has_result = (expression->type.kind != CHECKED_TYPE_VOID);
+    if (instruction.as.call.has_result) {
+        instruction.as.call.dest_temp = context->unit->next_temp_index++;
+    }
+
+    if (!mir_current_block(context)) {
+        mir_instruction_free(&instruction);
+        mir_set_error(context->build,
+                      expression->source_span,
+                      NULL,
+                      "Internal error: missing current MIR block after lowering template auto-call.");
+        return false;
+    }
+    if (!append_instruction(mir_current_block(context), instruction)) {
+        mir_instruction_free(&instruction);
+        mir_set_error(context->build,
+                      expression->source_span,
+                      NULL,
+                      "Out of memory while lowering MIR template auto-calls.");
+        return false;
+    }
+
+    if (instruction.as.call.has_result) {
+        value->kind = MIR_VALUE_TEMP;
+        value->type = expression->type;
+        value->as.temp_index = instruction.as.call.dest_temp;
+    } else {
+        *value = mir_invalid_value();
+        value->type = expression->type;
+    }
+    return true;
+}
+
 static bool lower_template_expression(MirUnitBuildContext *context,
                                       const HirExpression *expression,
                                       MirValue *value) {
@@ -1969,9 +2023,9 @@ static bool lower_template_expression(MirUnitBuildContext *context,
                               "Out of memory while lowering MIR templates.");
                 return false;
             }
-        } else if (!lower_expression(context,
-                                     expression->as.template_parts.items[i].as.expression,
-                                     &instruction.as.template_literal.parts[i].as.value)) {
+        } else if (!lower_template_part_value(context,
+                                              expression->as.template_parts.items[i].as.expression,
+                                              &instruction.as.template_literal.parts[i].as.value)) {
             mir_instruction_free(&instruction);
             return false;
         }

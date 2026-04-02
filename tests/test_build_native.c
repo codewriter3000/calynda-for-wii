@@ -273,12 +273,42 @@ static void test_build_native_runs_runtime_lambda_program(void) {
     unlink(output_path);
 }
 
+static void test_build_native_auto_calls_zero_arg_template_callable(void) {
+    static const char source[] =
+        "import io.stdlib;\n"
+        "start(string[] args) -> {\n"
+        "    stdlib.print(`They are printing: ${() -> \"Hello World\"}`);\n"
+        "    return 0;\n"
+        "};\n";
+    char output_path[64];
+    char stdout_buffer[128];
+    char *run_argv[] = { output_path, NULL };
+    const char *captured_stdout;
+    int exit_code;
+
+    REQUIRE_TRUE(build_native_executable(source, output_path, sizeof(output_path)),
+                 "build template auto-call native executable");
+    REQUIRE_TRUE(run_process_capture_stdout(output_path,
+                                            run_argv,
+                                            stdout_buffer,
+                                            sizeof(stdout_buffer),
+                                            &exit_code),
+                 "run template auto-call native executable and capture stdout");
+    ASSERT_EQ_INT(0, exit_code, "template auto-call native executable returns the start result");
+    captured_stdout = stdout_buffer;
+    ASSERT_EQ_STR("They are printing: Hello World\n",
+                  captured_stdout,
+                  "template interpolation auto-calls zero-argument callables");
+    unlink(output_path);
+}
+
 int main(void) {
     printf("Running native build tests...\n\n");
 
     RUN_TEST(test_build_native_runs_simple_start_program);
     RUN_TEST(test_build_native_handles_direct_eight_argument_calls);
     RUN_TEST(test_build_native_runs_runtime_lambda_program);
+    RUN_TEST(test_build_native_auto_calls_zero_arg_template_callable);
 
     printf("\n========================================\n");
     printf("  Total: %d  |  Passed: %d  |  Failed: %d\n",

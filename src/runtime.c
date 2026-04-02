@@ -250,6 +250,14 @@ CalyndaRtWord calynda_rt_make_string_copy(const char *bytes) {
     return make_object_word(string_object);
 }
 
+void calynda_rt_register_static_object(const CalyndaRtObjectHeader *object) {
+    if (!object || object->magic != CALYNDA_RT_OBJECT_MAGIC) {
+        return;
+    }
+
+    register_object_pointer((void *)(uintptr_t)object);
+}
+
 CalyndaRtWord __calynda_rt_closure_new(CalyndaRtClosureEntry code_ptr,
                                        size_t capture_count,
                                        const CalyndaRtWord *captures) {

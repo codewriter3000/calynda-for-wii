@@ -1873,6 +1873,17 @@ static const TypeCheckInfo *check_expression(TypeChecker *checker,
                         if (!part_info) {
                             return NULL;
                         }
+                        if (part_info->is_callable &&
+                            part_info->parameters &&
+                            part_info->parameters->count == 0 &&
+                            part_info->callable_return_type.kind == CHECKED_TYPE_VOID) {
+                            type_checker_set_error_at(
+                                checker,
+                                part->as.expression->source_span,
+                                NULL,
+                                "Template interpolation cannot auto-call a zero-argument callable returning void.");
+                            return NULL;
+                        }
                         if (type_check_source_type(part_info).kind == CHECKED_TYPE_VOID) {
                             type_checker_set_error_at(checker,
                                                       part->as.expression->source_span,

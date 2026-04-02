@@ -1359,6 +1359,7 @@ static bool emit_program_entry_glue(AsmEmitContext *context, FILE *out) {
     };
     const MachineUnit *start_unit = NULL;
     AsmUnitSymbol *start_symbol = NULL;
+    size_t string_index;
     size_t unit_index;
 
     if (!context || !context->program || !out) {
@@ -1390,7 +1391,20 @@ static bool emit_program_entry_glue(AsmEmitContext *context, FILE *out) {
                    "    mov rbp, rsp\n"
                    "    push r15\n"
                    "    sub rsp, 8\n"
-                   "    xor r15, r15\n"
+                   "    xor r15, r15\n")) {
+        return false;
+    }
+
+    for (string_index = 0; string_index < context->string_literal_count; string_index++) {
+        if (!emit_line(out,
+                       "    mov rdi, OFFSET FLAT:%s\n"
+                       "    call calynda_rt_register_static_object\n",
+                       context->string_literals[string_index].object_label)) {
+            return false;
+        }
+    }
+
+    if (!emit_line(out,
                    "    call %s\n"
                    "    add rsp, 8\n"
                    "    pop r15\n"

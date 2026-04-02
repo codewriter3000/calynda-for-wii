@@ -100,6 +100,7 @@ bool calynda_rt_format_word(CalyndaRtWord word, char *buffer, size_t buffer_size
 const char *calynda_rt_string_bytes(CalyndaRtWord word);
 size_t calynda_rt_array_length(CalyndaRtWord word);
 int calynda_rt_start_process(CalyndaRtProgramStartEntry entry, int argc, char **argv);
+void calynda_rt_register_static_object(const CalyndaRtObjectHeader *object);
 
 CalyndaRtWord calynda_rt_make_string_copy(const char *bytes);
 
