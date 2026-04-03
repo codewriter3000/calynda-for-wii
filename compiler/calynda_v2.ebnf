@@ -101,6 +101,10 @@ UnionVariant
 (* 3. TYPES                                                         *)
 (* ================================================================ *)
 
+(* Note: GenericArgs are syntactically optional on any PrimitiveType *)
+(* but semantic analysis rejects meaningless combinations such as   *)
+(* int32<T>. In practice, generics apply to user-defined container  *)
+(* types (resolved via Identifier) and the built-in arr<T> form.    *)
 Type
     = PrimitiveType [ GenericArgs ] { ArrayDimension }
     | "arr" GenericArgs                                        (* heterogeneous array *)
@@ -364,6 +368,8 @@ MultiplicativeExpression
     ;
 
 (* --- Unary prefix ----------------------------------------------- *)
+(* Note: * (dereference) and & (address-of) are parsed everywhere  *)
+(* but semantic analysis restricts them to manual{} blocks.        *)
 
 UnaryExpression
     = ( "!" | "~" | "-" | "+" | "*" | "&" ) UnaryExpression
