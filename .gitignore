@@ -1,6 +1,5 @@
 # Build output
 compiler/build/
-mcp-server/dist/
 
 # Object files
 *.o
