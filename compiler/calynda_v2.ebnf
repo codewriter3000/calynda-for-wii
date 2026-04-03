@@ -186,6 +186,8 @@ ExpressionStatement
 (* Manual memory boundary — enters unmanaged (GC-free) scope.      *)
 (* Inside a manual block, malloc/calloc/realloc/free are available  *)
 (* and pointer operators * (deref) and & (address-of) are legal.    *)
+(* malloc accepts any Type, including array types such as           *)
+(* int32[size], since Type already includes ArrayDimension.         *)
 (* Example:                                                         *)
 (*   manual (int32 size) -> {                                       *)
 (*       int32[] buf = malloc int32[size];                          *)

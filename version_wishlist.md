@@ -53,9 +53,10 @@ Support both Calynda primitive names **and** Java-style aliases:
 | `float32`    | `float`          |
 | `float64`    | `double`         |
 
-Both notation systems remain in the language. Java-style aliases are a transition
-aid for developers coming from Java or C; the Calynda-native names are the
-canonical form.
+Both notation systems remain in the language. Java-style aliases are primarily a
+transition aid for developers coming from Java; C developers may already be
+familiar with names like `char` and `double` that overlap with Calynda-native
+types. The Calynda-native names are the canonical form.
 
 ### 3.2 Reified Generics
 
@@ -183,7 +184,7 @@ qualification or aliasing. There is no implicit filename/directory fallback.
 
 | Item | Reason |
 |------|--------|
-| `asm()` | Deferred unless it solves a real problem that external adapters cannot solve. Will be re-evaluated only after the `manual()` model exists and only if a clear language-level justification remains. |
+| `asm()` | Deferred unless it solves a real problem that external adapters cannot solve. Will be re-evaluated only after the `manual()` model exists and only if a clear language-level justification remains (see Phase 4, step 12). |
 | One-statement callback shorthand | Deferred pending explicit decision. Auto-lifting semantics must be frozen before implementation. Without a precise rule, the shorthand risks looking like immediate evaluation rather than deferred callback creation. |
 | Transitive wildcard imports | Out of the first import design. Wildcard imports bind only directly exported names from the target module. |
 
