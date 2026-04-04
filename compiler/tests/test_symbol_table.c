@@ -1,5 +1,5 @@
-#include "../src/parser.h"
-#include "../src/symbol_table.h"
+#include "parser.h"
+#include "symbol_table.h"
 
 #include <stdio.h>
 #include <string.h>

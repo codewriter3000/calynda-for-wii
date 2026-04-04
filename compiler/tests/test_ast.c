@@ -1,4 +1,4 @@
-#include "../src/ast.h"
+#include "ast.h"
 
 #include <stdio.h>
 #include <string.h>

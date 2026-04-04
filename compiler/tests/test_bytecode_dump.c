@@ -1,7 +1,7 @@
-#include "../src/bytecode.h"
-#include "../src/hir.h"
-#include "../src/mir.h"
-#include "../src/parser.h"
+#include "bytecode.h"
+#include "hir.h"
+#include "mir.h"
+#include "parser.h"
 
 #include <stdio.h>
 #include <stdlib.h>

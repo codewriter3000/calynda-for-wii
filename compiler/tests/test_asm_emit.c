@@ -1,12 +1,12 @@
 #define _POSIX_C_SOURCE 200809L
 
-#include "../src/asm_emit.h"
-#include "../src/codegen.h"
-#include "../src/hir.h"
-#include "../src/lir.h"
-#include "../src/machine.h"
-#include "../src/mir.h"
-#include "../src/parser.h"
+#include "asm_emit.h"
+#include "codegen.h"
+#include "hir.h"
+#include "lir.h"
+#include "machine.h"
+#include "mir.h"
+#include "parser.h"
 
 #include <stdio.h>
 #include <stdlib.h>

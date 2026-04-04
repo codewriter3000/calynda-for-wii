@@ -1,6 +1,6 @@
 #define _POSIX_C_SOURCE 200809L
 
-#include "../src/runtime.h"
+#include "runtime.h"
 
 #include <stdio.h>
 #include <stdlib.h>

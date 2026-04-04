@@ -1,10 +1,10 @@
-#include "../src/codegen.h"
-#include "../src/hir.h"
-#include "../src/lir.h"
-#include "../src/machine.h"
-#include "../src/mir.h"
-#include "../src/parser.h"
-#include "../src/runtime_abi.h"
+#include "codegen.h"
+#include "hir.h"
+#include "lir.h"
+#include "machine.h"
+#include "mir.h"
+#include "parser.h"
+#include "runtime_abi.h"
 
 #include <stdio.h>
 #include <stdlib.h>

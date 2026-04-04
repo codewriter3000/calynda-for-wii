@@ -1,7 +1,7 @@
-#include "../src/hir.h"
-#include "../src/lir.h"
-#include "../src/mir.h"
-#include "../src/parser.h"
+#include "hir.h"
+#include "lir.h"
+#include "mir.h"
+#include "parser.h"
 
 #include <stdio.h>
 #include <stdlib.h>

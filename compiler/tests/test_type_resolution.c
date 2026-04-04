@@ -1,5 +1,5 @@
-#include "../src/parser.h"
-#include "../src/type_resolution.h"
+#include "parser.h"
+#include "type_resolution.h"
 
 #include <stdio.h>
 #include <string.h>

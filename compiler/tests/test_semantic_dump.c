@@ -1,5 +1,5 @@
-#include "../src/parser.h"
-#include "../src/semantic_dump.h"
+#include "parser.h"
+#include "semantic_dump.h"
 
 #include <stdio.h>
 #include <stdlib.h>

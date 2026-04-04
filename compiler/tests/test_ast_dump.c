@@ -1,5 +1,5 @@
-#include "../src/ast_dump.h"
-#include "../src/parser.h"
+#include "ast_dump.h"
+#include "parser.h"
 
 #include <stdio.h>
 #include <stdlib.h>

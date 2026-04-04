@@ -1,3 +1,69 @@
+# Calynda 0.2.1
+
+April 4, 2026
+
+Calynda 0.2.1 is a refactoring and cleanup release. No new language features are
+introduced.
+
+## Highlights
+
+- The obsolete V1 grammar has been removed. The canonical grammar now lives at
+  `compiler/calynda.ebnf` and reflects the full V2 language surface.
+- `manual()` and `asm()` references have been removed from the grammar. Both are
+  deferred to V3 and will not ship until their full design cycle is complete.
+- Every compiler source file in `compiler/src/` has been refactored to stay under
+  250 lines by splitting large modules into focused compilation units organized
+  by logical concern (e.g., `parser_expr.c`, `parser_decl.c`).
+- The Makefile has been updated to build all new split files.
+
+## Grammar Cleanup
+
+- Deleted the obsolete V1 grammar (`compiler/calynda.ebnf`).
+- Removed `ManualStatement`, `ManualBody`, `MallocStatement`, `CallocStatement`,
+  `ReallocStatement`, `FreeStatement`, and pointer operators `*`/`&` from the
+  grammar — all deferred to V3.
+- Renamed `compiler/calynda_v2.ebnf` to `compiler/calynda.ebnf` as the sole
+  canonical grammar.
+
+## Refactoring
+
+- Split 26 source files that exceeded 250 lines into ~65 focused compilation
+  units. Each split follows the module's existing header and public API — no
+  external interface changes.
+- All 1147 tests continue to pass.
+
+---
+
+# Calynda 0.2.0
+
+April 4, 2026
+
+Calynda 0.2.0 lands the V2 language surface on top of the 0.1.0 compiled
+toolchain.
+
+## Highlights
+
+- Reified generics with Java-style `<T>`, `<K, V>`, and wildcard `<?>` syntax.
+- Heterogeneous arrays via `arr<?>`, replacing the old struct concept.
+- Tagged unions with `union Name<T> { Variant(T), Empty }` declarations.
+- Expanded import model: module aliases (`as`), wildcard imports (`.*`),
+  selective imports (`{a, b, c}`), and explicit `export` control.
+- Primitive aliases: `byte`, `sbyte`, `short`, `int`, `long`, `ulong`, `uint`,
+  `float`, `double` alongside Calynda-native type names.
+- Prefix and postfix `++`/`--` operators.
+- Varargs parameters (`Type... name`).
+- Discard expression (`_`).
+- `internal` modifier for nested helper visibility.
+- `static` and `export` modifiers for top-level declarations.
+
+## Deferred To V3
+
+- `manual()` — manual memory boundary with malloc/calloc/realloc/free.
+- `asm()` — inline assembly. Depends on `manual()` landing first.
+- One-statement callback shorthand — pending explicit auto-lift rule decision.
+
+---
+
 # Calynda 0.1.0
 
 April 2, 2026
@@ -17,7 +83,7 @@ Calynda 0.1.0 ships the first end-to-end compiled toolchain for the language: pa
 
 This first edition includes the front-end and semantic pipeline needed to compile non-trivial Calynda programs.
 
-- Recursive-descent parsing from the Calynda grammar in [calynda.ebnf](/home/codewriter3000/Coding/calynda-lang/calynda.ebnf).
+- Recursive-descent parsing from the Calynda grammar in [calynda.ebnf](compiler/calynda.ebnf).
 - Source-aware diagnostics for parse, symbol, and type errors.
 - A required single `start(string[] args)` program entry point.
 - Lambda-based callable model with first-class lambdas and closure lowering.

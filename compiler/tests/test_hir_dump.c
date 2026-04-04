@@ -1,6 +1,6 @@
-#include "../src/hir.h"
-#include "../src/hir_dump.h"
-#include "../src/parser.h"
+#include "hir.h"
+#include "hir_dump.h"
+#include "parser.h"
 
 #include <stdio.h>
 #include <stdlib.h>

@@ -1,9 +1,6 @@
 (* ===================================================================== *)
-(* Calynda V2 — EBNF Grammar Specification                               *)
-(* Cloned from compiler/calynda.ebnf on 2026-04-02                       *)
-(*                                                                        *)
-(* This file is the isolated V2 grammar sandbox. V1 remains canonical     *)
-(* until V2 changes are intentionally designed, implemented, and adopted. *)
+(* Calynda — EBNF Grammar Specification                                  *)
+(* Canonical grammar for the Calynda language.                            *)
 (* ===================================================================== *)
 
 
@@ -157,7 +154,6 @@ Statement
     | ReturnStatement
     | ExitStatement
     | ThrowStatement
-    | ManualStatement
     | ExpressionStatement
     ;
 
@@ -185,51 +181,6 @@ ExpressionStatement
     = Expression ";"
     ;
 
-(* Manual memory boundary — enters unmanaged (GC-free) scope.      *)
-(* Inside a manual block, malloc/calloc/realloc/free are available  *)
-(* and pointer operators * (deref) and & (address-of) are legal.    *)
-(* malloc accepts any Type, including array types such as           *)
-(* int32[size], since Type already includes ArrayDimension.         *)
-(* Example:                                                         *)
-(*   manual (int32 size) -> {                                       *)
-(*       int32[] buf = malloc int32[size];                          *)
-(*       free buf;                                                  *)
-(*   };                                                             *)
-ManualStatement
-    = "manual" "(" [ ParameterList ] ")" "->" ManualBody ";"
-    ;
-
-ManualBody
-    = "{" { ManualStatementItem } "}"
-    ;
-
-ManualStatementItem
-    = Statement
-    | MallocStatement
-    | CallocStatement
-    | ReallocStatement
-    | FreeStatement
-    ;
-
-MallocStatement
-    = "malloc" Type ";"
-    ;
-
-CallocStatement
-    = "calloc" Expression "," Expression ";"
-    | "calloc" Expression ";"
-    ;
-
-ReallocStatement
-    = "realloc" Expression "," Expression ";"
-    | "realloc" Expression ";"
-    ;
-
-FreeStatement
-    = "free" Expression ";"
-    ;
-
-
 (* ================================================================ *)
 (* 5. EXPRESSIONS — Precedence (lowest to highest)                  *)
 (*                                                                  *)
@@ -248,7 +199,7 @@ FreeStatement
 (* 12. Shift               <<  >>                                   *)
 (* 13. Additive            +  -                                     *)
 (* 14. Multiplicative      *  /  %                                  *)
-(* 15. Unary prefix        !  ~  -  +  *  &  ++  --                 *)
+(* 15. Unary prefix        !  ~  -  +  ++  --                        *)
 (* 16. Postfix             ()  []  .  ++  --                         *)
 (* 17. Primary             literals, identifiers, _, parens,        *)
 (*                          lambdas, casts                          *)
@@ -372,11 +323,9 @@ MultiplicativeExpression
     ;
 
 (* --- Unary prefix ----------------------------------------------- *)
-(* Note: * (dereference) and & (address-of) are parsed everywhere  *)
-(* but semantic analysis restricts them to manual{} blocks.        *)
 
 UnaryExpression
-    = ( "!" | "~" | "-" | "+" | "*" | "&" ) UnaryExpression
+    = ( "!" | "~" | "-" | "+" ) UnaryExpression
     | "++" UnaryExpression                                     (* prefix increment *)
     | "--" UnaryExpression                                     (* prefix decrement *)
     | PostfixExpression

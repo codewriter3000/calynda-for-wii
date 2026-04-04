@@ -1,0 +1,172 @@
+#include "tokenizer_internal.h"
+
+/* ------------------------------------------------------------------ */
+/*  Number literals                                                   */
+/* ------------------------------------------------------------------ */
+
+Token tokenizer_scan_number(Tokenizer *t, const char *start,
+                            int line, int col) {
+    /* Check for 0b, 0o, 0x prefixes */
+    if (start[0] == '0' && !is_at_end(t)) {
+        char next = peek(t);
+        if (next == 'b' || next == 'B') {
+            advance_char(t); /* consume b/B */
+            if (is_at_end(t) || (peek(t) != '0' && peek(t) != '1'))
+                return error_token(t, "Expected binary digit after 0b", line, col);
+            while (!is_at_end(t) && (peek(t) == '0' || peek(t) == '1'))
+                advance_char(t);
+            return make_token(t, TOK_INT_LIT, start, line, col);
+        }
+        if (next == 'o' || next == 'O') {
+            advance_char(t); /* consume o/O */
+            if (is_at_end(t) || peek(t) < '0' || peek(t) > '7')
+                return error_token(t, "Expected octal digit after 0o", line, col);
+            while (!is_at_end(t) && peek(t) >= '0' && peek(t) <= '7')
+                advance_char(t);
+            return make_token(t, TOK_INT_LIT, start, line, col);
+        }
+        if (next == 'x' || next == 'X') {
+            advance_char(t); /* consume x/X */
+            if (is_at_end(t) || !isxdigit((unsigned char)peek(t)))
+                return error_token(t, "Expected hex digit after 0x", line, col);
+            while (!is_at_end(t) && isxdigit((unsigned char)peek(t)))
+                advance_char(t);
+            return make_token(t, TOK_INT_LIT, start, line, col);
+        }
+    }
+
+    /* Decimal digits */
+    while (!is_at_end(t) && isdigit((unsigned char)peek(t)))
+        advance_char(t);
+
+    int is_float = 0;
+
+    /* Fractional part */
+    if (!is_at_end(t) && peek(t) == '.' && isdigit((unsigned char)peek_next(t))) {
+        is_float = 1;
+        advance_char(t); /* consume . */
+        while (!is_at_end(t) && isdigit((unsigned char)peek(t)))
+            advance_char(t);
+    }
+
+    /* Exponent */
+    if (!is_at_end(t) && (peek(t) == 'e' || peek(t) == 'E')) {
+        is_float = 1;
+        advance_char(t); /* consume e/E */
+        if (!is_at_end(t) && (peek(t) == '+' || peek(t) == '-'))
+            advance_char(t);
+        if (is_at_end(t) || !isdigit((unsigned char)peek(t)))
+            return error_token(t, "Expected digit in exponent", line, col);
+        while (!is_at_end(t) && isdigit((unsigned char)peek(t)))
+            advance_char(t);
+    }
+
+    return make_token(t, is_float ? TOK_FLOAT_LIT : TOK_INT_LIT,
+                      start, line, col);
+}
+
+/* ------------------------------------------------------------------ */
+/*  Escape sequences (shared by char, string, template)               */
+/* ------------------------------------------------------------------ */
+
+static int scan_escape(Tokenizer *t) {
+    if (is_at_end(t)) return 0;
+    char c = advance_char(t);
+    switch (c) {
+    case 'n': case 't': case 'r': case '\\': case '\'':
+    case '"': case '`': case '$': case '0':
+        return 1;
+    case 'u':
+        for (int i = 0; i < 4; i++) {
+            if (is_at_end(t) || !isxdigit((unsigned char)peek(t)))
+                return 0;
+            advance_char(t);
+        }
+        return 1;
+    default:
+        return 0;
+    }
+}
+
+/* ------------------------------------------------------------------ */
+/*  Char literal                                                      */
+/* ------------------------------------------------------------------ */
+
+Token tokenizer_scan_char(Tokenizer *t, const char *start,
+                          int line, int col) {
+    if (is_at_end(t) || peek(t) == '\n')
+        return error_token(t, "Unterminated char literal", line, col);
+
+    if (peek(t) == '\\') {
+        advance_char(t); /* consume \ */
+        if (!scan_escape(t))
+            return error_token(t, "Invalid escape in char literal", line, col);
+    } else if (peek(t) == '\'') {
+        return error_token(t, "Empty char literal", line, col);
+    } else {
+        advance_char(t); /* the character */
+    }
+
+    if (is_at_end(t) || peek(t) != '\'')
+        return error_token(t, "Unterminated char literal", line, col);
+    advance_char(t); /* closing ' */
+    return make_token(t, TOK_CHAR_LIT, start, line, col);
+}
+
+/* ------------------------------------------------------------------ */
+/*  String literal                                                    */
+/* ------------------------------------------------------------------ */
+
+Token tokenizer_scan_string(Tokenizer *t, const char *start,
+                            int line, int col) {
+    while (!is_at_end(t) && peek(t) != '"') {
+        if (peek(t) == '\n')
+            return error_token(t, "Unterminated string literal", line, col);
+        if (peek(t) == '\\') {
+            advance_char(t); /* consume \ */
+            if (!scan_escape(t))
+                return error_token(t, "Invalid escape in string", line, col);
+        } else {
+            advance_char(t);
+        }
+    }
+    if (is_at_end(t))
+        return error_token(t, "Unterminated string literal", line, col);
+    advance_char(t); /* closing " */
+    return make_token(t, TOK_STRING_LIT, start, line, col);
+}
+
+/* ------------------------------------------------------------------ */
+/*  Template literal                                                  */
+/* ------------------------------------------------------------------ */
+
+Token tokenizer_scan_template_body(Tokenizer *t, const char *start,
+                                   int line, int col, TokenType on_interp,
+                                   TokenType on_end) {
+    while (!is_at_end(t)) {
+        if (peek(t) == '\\') {
+            advance_char(t);
+            if (!scan_escape(t))
+                return error_token(t, "Invalid escape in template literal",
+                                   line, col);
+            continue;
+        }
+        if (peek(t) == '$' && peek_next(t) == '{') {
+            Token tok = make_token(t, on_interp, start, line, col);
+            if (t->template_depth >= TOKENIZER_MAX_TEMPLATE_DEPTH)
+                return error_token(t, "Template interpolation nesting too deep",
+                                   line, col);
+            advance_char(t); /* $ */
+            advance_char(t); /* { */
+            t->interpolation_brace_depth[t->template_depth] = 0;
+            t->template_depth++;
+            return tok;
+        }
+        if (peek(t) == '`') {
+            advance_char(t); /* closing ` */
+            return make_token(t, on_end, start, line, col);
+        }
+        advance_char(t);
+    }
+    return error_token(t, "Unterminated template literal", line, col);
+}

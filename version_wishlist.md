@@ -22,14 +22,13 @@ tooling.
 
 ---
 
-## 2. V2 Grammar Sandbox
+## 2. Canonical Grammar
 
-The working V2 grammar lives at `compiler/calynda_v2.ebnf`. All experimental
-grammar changes must happen in this file.
+The canonical grammar lives at `compiler/calynda.ebnf`. All grammar changes
+must happen in this file.
 
-The canonical V1 grammar at `compiler/calynda.ebnf` **must not be modified** until
-a V2 slice is fully validated — parser-complete, semantically specified, tested,
-and mirrored across the compiler and tooling.
+The old V1 grammar has been removed. The V2 grammar is now the sole
+authoritative grammar for the language.
 
 ---
 
@@ -198,9 +197,9 @@ qualification or aliasing. There is no implicit filename/directory fallback.
    features, add the agreed import model, and split content into agreed, deferred,
    and rejected sections.
 
-2. **Preserve the grammar sandbox.** Keep `compiler/calynda_v2.ebnf` as the only
-   active V2 grammar sandbox. Do not update the canonical V1 grammar until a V2
-   slice is complete and validated.
+2. **Grammar is canonical.** The grammar now lives at `compiler/calynda.ebnf`
+   as the sole authoritative grammar. The old V1 grammar and V2 sandbox model
+   have been removed.
 
 3. **Spec the import system.** Convert the import system from a single
    `import QualifiedName;` rule into a full module system spec with direct import,
@@ -319,8 +318,7 @@ The following decisions have been explicitly made for the V2 design:
 | File | Purpose |
 |------|---------|
 | `version_wishlist.md` | This document — the authoritative V2 planning and spec document. |
-| `compiler/calynda_v2.ebnf` | V2 grammar sandbox. Evolve in isolation before promoting changes into the canonical grammar. |
-| `compiler/calynda.ebnf` | Canonical V1 grammar. Keep unchanged until a V2 slice is intentionally promoted. |
+| `compiler/calynda.ebnf` | Canonical grammar for the Calynda language. |
 | `compiler/src/tokenizer.h` | Add tokens for new keywords and operators: `export`, `as`, `internal`, `static`, `++`, `--`, and primitive aliases. |
 | `compiler/src/tokenizer.c` | Update keyword and operator recognition for V2 syntax. |
 | `compiler/src/parser.c` | Extend grammar handling for imports/exports, aliases, selective/wildcard imports, generic parameters, `arr<?>` types, varargs, discard expression, and internal nested helpers. |
