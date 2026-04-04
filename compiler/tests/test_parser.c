@@ -526,7 +526,7 @@ static void test_parse_import_selective(void) {
 static void test_parse_java_primitive_aliases(void) {
     const char *source =
         "int x = 5;\n"
-        "double pi = 3.14;\n"
+        "float pi = 3.14;\n"
         "byte b = 0;\n";
     Parser parser;
     AstProgram program;
@@ -538,9 +538,9 @@ static void test_parse_java_primitive_aliases(void) {
     ASSERT_EQ_INT(AST_PRIMITIVE_INT,
                   program.top_level_decls[0]->as.binding_decl.declared_type.primitive,
                   "int alias primitive type");
-    ASSERT_EQ_INT(AST_PRIMITIVE_DOUBLE,
+    ASSERT_EQ_INT(AST_PRIMITIVE_FLOAT,
                   program.top_level_decls[1]->as.binding_decl.declared_type.primitive,
-                  "double alias primitive type");
+                  "float alias primitive type");
     ASSERT_EQ_INT(AST_PRIMITIVE_BYTE,
                   program.top_level_decls[2]->as.binding_decl.declared_type.primitive,
                   "byte alias primitive type");

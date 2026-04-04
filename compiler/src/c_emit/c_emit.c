@@ -44,7 +44,7 @@ static bool emit_forward_decls(CEmitContext *ctx, const HirProgram *program) {
         const HirTopLevelDecl *decl = program->top_level_decls[i];
 
         if (decl && decl->kind == HIR_TOP_LEVEL_START) {
-            fputs("static CalyndaRtWord __calynda_start(CalyndaRtWord __cal_args);\n", out);
+            fputs("static CalyndaRtWord __calynda_start(CalyndaRtWord __calynda_argv);\n", out);
             break;
         }
     }
@@ -117,15 +117,15 @@ static bool emit_start_function(CEmitContext *ctx, const HirProgram *program) {
             continue;
         }
 
-        fputs("static CalyndaRtWord __calynda_start(CalyndaRtWord __cal_args)\n{\n", out);
+        fputs("static CalyndaRtWord __calynda_start(CalyndaRtWord __calynda_argv)\n{\n", out);
 
         /* Bind parameter name (the args array) */
         if (decl->as.start.parameters.count > 0) {
             fprintf(out, "    CalyndaRtWord ");
             c_emit_global_name(out, decl->as.start.parameters.items[0].name);
-            fputs(" = __cal_args;\n", out);
+            fputs(" = __calynda_argv;\n", out);
         } else {
-            fputs("    (void)__cal_args;\n", out);
+            fputs("    (void)__calynda_argv;\n", out);
         }
 
         if (!c_emit_block(ctx, decl->as.start.body)) {
@@ -138,8 +138,8 @@ static bool emit_start_function(CEmitContext *ctx, const HirProgram *program) {
     }
 
     /* No start decl — emit a trivial one */
-    fputs("static CalyndaRtWord __calynda_start(CalyndaRtWord __cal_args)\n{\n", out);
-    fputs("    (void)__cal_args;\n", out);
+    fputs("static CalyndaRtWord __calynda_start(CalyndaRtWord __calynda_argv)\n{\n", out);
+    fputs("    (void)__calynda_argv;\n", out);
     fputs("    return (CalyndaRtWord)0;\n", out);
     fputs("}\n\n", out);
     return true;

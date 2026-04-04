@@ -38,13 +38,10 @@ static const Keyword keywords[] = {
     {"int8",     TOK_INT8},
     {"int16",    TOK_INT16},
     {"int32",    TOK_INT32},
-    {"int64",    TOK_INT64},
     {"uint8",    TOK_UINT8},
     {"uint16",   TOK_UINT16},
     {"uint32",   TOK_UINT32},
-    {"uint64",   TOK_UINT64},
     {"float32",  TOK_FLOAT32},
-    {"float64",  TOK_FLOAT64},
     {"bool",     TOK_BOOL},
     {"char",     TOK_CHAR},
     {"string",   TOK_STRING},
@@ -52,11 +49,8 @@ static const Keyword keywords[] = {
     {"sbyte",    TOK_SBYTE},
     {"short",    TOK_SHORT},
     {"int",      TOK_INT},
-    {"long",     TOK_LONG},
-    {"ulong",    TOK_ULONG},
     {"uint",     TOK_UINT},
     {"float",    TOK_FLOAT},
-    {"double",   TOK_DOUBLE},
     {NULL, TOK_EOF}
 };
 

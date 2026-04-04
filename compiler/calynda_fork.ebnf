@@ -1,0 +1,358 @@
+(* ===================================================================== *)
+(* calynda-for-wii — Fork Grammar Specification                          *)
+(* Fork of the Calynda language grammar, targeting Wii/GameCube via C.   *)
+(*                                                                        *)
+(* Divergences from the canonical calynda.ebnf:                          *)
+(*   1. 64-bit numeric types REMOVED: int64, uint64, float64              *)
+(*      Aliases REMOVED: long, ulong, double                              *)
+(*      Reason: Wii/Broadway is 32-bit; CalyndaRtWord = uint32_t          *)
+(*   2. boot() entry point ADDED (freestanding / no runtime init)         *)
+(*   3. extern c() FFI declarations ADDED (call C functions)              *)
+(*   4. Statement decomposition (#1), mapped functions (#2),              *)
+(*      bytecode() -> {} (#10), and CAR archives (#3) are NOT in this fork *)
+(* ===================================================================== *)
+
+
+(* ================================================================ *)
+(* 1. PROGRAM STRUCTURE                                             *)
+(* ================================================================ *)
+
+Program
+    = [ PackageDecl ]
+      { ImportDecl }
+      { TopLevelDecl }
+    ;
+
+PackageDecl
+    = "package" QualifiedName ";"
+    ;
+
+ImportDecl
+    = "import" QualifiedName ";"                              (* plain import *)
+    | "import" QualifiedName "as" Identifier ";"              (* module alias *)
+    | "import" QualifiedName "." "*" ";"                      (* wildcard — direct exports only *)
+    | "import" QualifiedName "." "{" ImportNameList "}" ";"   (* selective import *)
+    ;
+
+ImportNameList
+    = Identifier { "," Identifier }
+    ;
+
+QualifiedName
+    = Identifier { "." Identifier }
+    ;
+
+
+(* ================================================================ *)
+(* 2. TOP-LEVEL DECLARATIONS                                        *)
+(* ================================================================ *)
+
+TopLevelDecl
+    = StartDecl
+    | BootDecl
+    | BindingDecl
+    | UnionDecl
+    | ExternDecl
+    ;
+
+(* Entry point — calls calynda_rt_start_process. Returns int32 exit code. *)
+(* Syntax: start(string[] args) -> { ... };                               *)
+StartDecl
+    = "start" "(" ParameterList ")" "->" ( Block | Expression ) ";"
+    ;
+
+(* Freestanding entry point — emits bare _start or platform entry symbol. *)
+(* No runtime initialisation. Compiles with -ffreestanding -nostdlib.     *)
+(* For Wii: emits devkitPPC entry point conventions.                      *)
+BootDecl
+    = "boot" "(" ParameterList ")" "->" ( Block | Expression ) ";"
+    ;
+
+(* Variable / function binding with optional modifiers.             *)
+(* Examples:                                                        *)
+(*   int32 x = 5;                                                   *)
+(*   public int8 add = (int32 a, int32 b) -> a + b;                *)
+(*   var y = 42;                                                    *)
+BindingDecl
+    = { Modifier } ( Type | "var" ) Identifier "=" Expression ";"
+    ;
+
+(* C FFI extern declaration.                                        *)
+(* Syntax: extern int32 printf = c(string fmt, ...);                *)
+(* Type-safe Calynda type annotations at the boundary.              *)
+ExternDecl
+    = "extern" Type Identifier "=" "c" "(" [ ExternParamList ] ")" ";"
+    ;
+
+ExternParamList
+    = ExternParam { "," ExternParam } [ "," "..." ]
+    | "..."
+    ;
+
+ExternParam
+    = Type Identifier
+    ;
+
+Modifier
+    = "public"
+    | "private"
+    | "final"
+    | "export"
+    | "static"
+    | "internal"
+    | "manual"
+    ;
+
+UnionDecl
+    = { Modifier } "union" Identifier [ "<" GenericParamList ">" ] "{" VariantList "}" ";"
+    ;
+
+GenericParamList
+    = Identifier { "," Identifier }
+    ;
+
+VariantList
+    = Variant { "," Variant }
+    ;
+
+Variant
+    = Identifier [ "(" Type ")" ]
+    ;
+
+
+(* ================================================================ *)
+(* 3. TYPES                                                         *)
+(* ================================================================ *)
+
+Type
+    = PrimitiveType { ArrayDimension }
+    | "arr" "<" Type [ "," TypeOrWild ] ">" { ArrayDimension }
+    | "void"
+    | QualifiedName [ "<" GenericArgList ">" ] { ArrayDimension }
+    ;
+
+(*                                                                  *)
+(* FORK CHANGE: 64-bit types are REMOVED from this fork.            *)
+(*   Removed: int64, uint64, float64                                *)
+(*   Removed aliases: long, ulong, double                           *)
+(*   Reason: CalyndaRtWord = uint32_t for Wii/32-bit Broadway CPU.  *)
+(*                                                                  *)
+PrimitiveType
+    = "int8"   | "int16"  | "int32"
+    | "uint8"  | "uint16" | "uint32"
+    | "float32"
+    | "bool"
+    | "char"
+    | "string"
+    (* Java-style aliases for 32-bit types only *)
+    | "byte" | "sbyte" | "short" | "int"
+    | "uint" | "float"
+    ;
+
+(* Unsized [] or sized [IntegerLiteral] array dimensions.           *)
+ArrayDimension
+    = "[" [ IntegerLiteral ] "]"
+    ;
+
+TypeOrWild
+    = Type
+    | "*"
+    ;
+
+GenericArgList
+    = GenericArg { "," GenericArg }
+    ;
+
+GenericArg
+    = Type
+    | "*"
+    ;
+
+
+(* ================================================================ *)
+(* 4. STATEMENTS                                                    *)
+(* ================================================================ *)
+
+Block
+    = "{" { Statement } "}"
+    ;
+
+Statement
+    = ReturnStatement
+    | ExitStatement
+    | ThrowStatement
+    | LocalBindingStatement
+    | ExpressionStatement
+    ;
+
+ReturnStatement
+    = "return" Expression ";"
+    ;
+
+ExitStatement
+    = "exit" "(" Expression ")" ";"
+    ;
+
+ThrowStatement
+    = "throw" Expression ";"
+    ;
+
+LocalBindingStatement
+    = [ "final" ] [ "internal" ] ( Type | "var" ) Identifier "=" Expression ";"
+    ;
+
+ExpressionStatement
+    = Expression ";"
+    ;
+
+
+(* ================================================================ *)
+(* 5. EXPRESSIONS                                                   *)
+(* ================================================================ *)
+
+Expression
+    = AssignmentExpression
+    ;
+
+AssignmentExpression
+    = TernaryExpression
+    | PrimaryOrPostfix AssignmentOp AssignmentExpression
+    ;
+
+AssignmentOp
+    = "=" | "+=" | "-=" | "*=" | "/=" | "%="
+    | "&=" | "|=" | "^=" | "<<=" | ">>="
+    ;
+
+TernaryExpression
+    = LogicalOrExpression
+    | LogicalOrExpression "?" Expression ":" TernaryExpression
+    ;
+
+LogicalOrExpression  = LogicalAndExpression { "||" LogicalAndExpression } ;
+LogicalAndExpression = BitwiseOrExpression  { "&&" BitwiseOrExpression  } ;
+BitwiseOrExpression  = BitwiseXorExpression { "|"  BitwiseXorExpression } ;
+BitwiseXorExpression = BitwiseAndExpression { "^"  BitwiseAndExpression } ;
+BitwiseAndExpression = EqualityExpression   { "&"  EqualityExpression   } ;
+EqualityExpression   = RelationalExpression { ( "==" | "!=" ) RelationalExpression } ;
+RelationalExpression = ShiftExpression      { ( "<" | ">" | "<=" | ">=" ) ShiftExpression } ;
+ShiftExpression      = AdditiveExpression   { ( "<<" | ">>" ) AdditiveExpression } ;
+AdditiveExpression   = MultiplicativeExpression { ( "+" | "-" ) MultiplicativeExpression } ;
+MultiplicativeExpression = UnaryExpression  { ( "*" | "/" | "%" ) UnaryExpression } ;
+
+UnaryExpression
+    = PostfixExpression
+    | "!" UnaryExpression
+    | "~" UnaryExpression
+    | "-" UnaryExpression
+    | "+" UnaryExpression
+    | "++" UnaryExpression
+    | "--" UnaryExpression
+    | "*" UnaryExpression                      (* dereference — manual blocks only *)
+    | "&" UnaryExpression                      (* address-of — manual blocks only  *)
+    ;
+
+PostfixExpression
+    = PrimaryExpression
+    | PostfixExpression "++"
+    | PostfixExpression "--"
+    | PostfixExpression "[" Expression "]"
+    | PostfixExpression "." Identifier
+    | PostfixExpression "(" [ ArgumentList ] ")"
+    | PostfixExpression "(" Type ")"           (* cast syntax: expr(Type)           *)
+    ;
+
+PrimaryExpression
+    = Literal
+    | QualifiedName
+    | "_"                                      (* discard *)
+    | LambdaExpression
+    | "(" Expression ")"
+    ;
+
+LambdaExpression
+    = "(" ParameterList ")" "->" ( Block | Expression )
+    ;
+
+ParameterList
+    = [ Parameter { "," Parameter } ]
+    ;
+
+Parameter
+    = Type Identifier
+    | Type "..." Identifier                    (* varargs parameter *)
+    ;
+
+ArgumentList
+    = Expression { "," Expression }
+    ;
+
+
+(* ================================================================ *)
+(* 6. LITERALS                                                      *)
+(* ================================================================ *)
+
+Literal
+    = IntegerLiteral
+    | FloatLiteral
+    | BoolLiteral
+    | CharLiteral
+    | StringLiteral
+    | TemplateLiteral
+    | "null"
+    ;
+
+IntegerLiteral
+    = DecimalLiteral
+    | HexLiteral
+    | BinaryLiteral
+    | OctalLiteral
+    ;
+
+DecimalLiteral = Digit { Digit } ;
+HexLiteral     = "0x" HexDigit { HexDigit } ;
+BinaryLiteral  = "0b" ( "0" | "1" ) { "0" | "1" } ;
+OctalLiteral   = "0o" OctalDigit { OctalDigit } ;
+
+FloatLiteral
+    = Digit { Digit } "." { Digit } [ ( "e" | "E" ) [ "+" | "-" ] Digit { Digit } ]
+    ;
+
+BoolLiteral    = "true" | "false" ;
+CharLiteral    = "'" CharChar "'" ;
+StringLiteral  = '"' { StringChar } '"' ;
+TemplateLiteral = "`" { TemplateText | "${" Expression "}" } "`" ;
+
+CharChar   = (* any character except single-quote or backslash *) | EscapeSequence ;
+StringChar = (* any character except double-quote or backslash *) | EscapeSequence ;
+TemplateText = (* any text except ` or ${ *) ;
+
+EscapeSequence = "\" ( "n" | "t" | "r" | "\" | "'" | '"' | "0" ) ;
+
+
+(* ================================================================ *)
+(* 7. IDENTIFIERS AND KEYWORDS                                      *)
+(* ================================================================ *)
+
+Identifier
+    = ( Letter | "_" ) { Letter | Digit | "_" }
+    ;
+
+Letter  = "A".."Z" | "a".."z" ;
+Digit   = "0".."9" ;
+HexDigit = Digit | "A".."F" | "a".."f" ;
+OctalDigit = "0".."7" ;
+
+(*                                                                  *)
+(* Reserved keywords — cannot be used as identifiers:              *)
+(*   package import start boot extern                               *)
+(*   var public private final void return exit throw                *)
+(*   true false null export as internal static union manual arr     *)
+(*   int8 int16 int32 uint8 uint16 uint32 float32                   *)
+(*   bool char string                                               *)
+(*   byte sbyte short int uint float                                *)
+(*   malloc calloc realloc free                                     *)
+(*                                                                  *)
+(* NOTE: int64 uint64 float64 long ulong double are NOT reserved    *)
+(*       in this fork and are valid identifiers.                    *)
+(*                                                                  *)
