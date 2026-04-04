@@ -45,6 +45,8 @@ bool c_emit_stmt(CEmitContext *ctx, const HirStatement *stmt) {
                 return false;
             }
         } else if (!ctx->is_boot_context) {
+            /* boot() declares void return; bare 'return;' compiles without a value.
+             * For start() and lambdas (CalyndaRtWord return), emit an explicit zero. */
             fputs("(CalyndaRtWord)0", out);
         }
         fputs(";\n", out);

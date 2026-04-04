@@ -212,7 +212,8 @@ bool tc_check_block(TypeChecker *checker, const AstBlock *block,
                         tc_block_context_related_span(context, primary_span),
                         "%s body must produce %s but got %s.",
                         context->kind == BLOCK_CONTEXT_START ? "start"
-                            : context->kind == BLOCK_CONTEXT_BOOT ? "boot" : "Lambda",
+                        : context->kind == BLOCK_CONTEXT_BOOT  ? "boot"
+                        : "Lambda",
                         expected_text,
                         actual_text);
         return false;
