@@ -4,10 +4,10 @@ exports.CALYNDA_GRAMMAR = void 0;
 exports.CALYNDA_GRAMMAR = `
 (* ===================================================================== *)
 (* Calynda V2 — EBNF Grammar Specification                               *)
-(* Cloned from compiler/calynda.ebnf on 2026-04-02                       *)
+(* Mirrored from compiler/calynda.ebnf — the canonical V2 grammar.       *)
 (*                                                                        *)
-(* This file is the isolated V2 grammar sandbox. V1 remains canonical     *)
-(* until V2 changes are intentionally designed, implemented, and adopted. *)
+(* Update this file only when a V2 compiler slice is complete and the     *)
+(* canonical grammar has been intentionally promoted.                     *)
 (* ===================================================================== *)
 
 

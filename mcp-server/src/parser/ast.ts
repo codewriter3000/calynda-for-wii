@@ -3,11 +3,12 @@ export type NodeKind =
   | 'StartDecl' | 'BindingDecl' | 'UnionDecl'
   | 'Block' | 'LocalBindingStatement' | 'ReturnStatement' | 'ExitStatement' | 'ThrowStatement' | 'ExpressionStatement'
   | 'LambdaExpression' | 'AssignmentExpression' | 'TernaryExpression'
-  | 'BinaryExpression' | 'UnaryExpression' | 'PostfixExpression'
+  | 'BinaryExpression' | 'UnaryExpression' | 'PostfixExpression' | 'PostfixIncrementExpression' | 'PostfixDecrementExpression'
   | 'CallExpression' | 'IndexExpression' | 'MemberExpression'
-  | 'CastExpression' | 'ArrayLiteral'
+  | 'CastExpression' | 'ArrayLiteral' | 'DiscardExpression'
   | 'Identifier' | 'IntegerLiteral' | 'FloatLiteral' | 'BoolLiteral' | 'CharLiteral' | 'StringLiteral' | 'TemplateLiteral' | 'NullLiteral'
   | 'Parameter' | 'ParameterList' | 'ArrayType' | 'PrimitiveType' | 'NamedType' | 'VoidType'
+  | 'HeterogeneousArrayType' | 'WildcardType'
   ;
 
 export interface Position {
@@ -36,7 +37,14 @@ export interface PackageDecl extends ASTNode {
 
 export interface ImportDecl extends ASTNode {
   kind: 'ImportDecl';
+  /** Fully-qualified module name (e.g. "foo.bar") */
   name: string;
+  /** V2 import form */
+  form: 'plain' | 'alias' | 'wildcard' | 'selective';
+  /** Alias name for `import foo.bar as baz` */
+  alias?: string;
+  /** Selected names for `import foo.bar.{a, b, c}` */
+  selected?: string[];
 }
 
 export type TopLevelDecl = StartDecl | BindingDecl | UnionDecl;
@@ -68,7 +76,7 @@ export interface BindingDecl extends ASTNode {
   value: Expression;
 }
 
-export type TypeNode = PrimitiveTypeNode | ArrayTypeNode | NamedTypeNode | VoidTypeNode;
+export type TypeNode = PrimitiveTypeNode | ArrayTypeNode | NamedTypeNode | VoidTypeNode | HeterogeneousArrayTypeNode | WildcardTypeNode;
 
 export interface PrimitiveTypeNode extends ASTNode {
   kind: 'PrimitiveType';
@@ -91,10 +99,23 @@ export interface VoidTypeNode extends ASTNode {
   kind: 'VoidType';
 }
 
+/** V2: heterogeneous array type `arr<?>` or `arr<T>` */
+export interface HeterogeneousArrayTypeNode extends ASTNode {
+  kind: 'HeterogeneousArrayType';
+  genericArgs: TypeNode[];
+}
+
+/** V2: wildcard generic type argument `?` */
+export interface WildcardTypeNode extends ASTNode {
+  kind: 'WildcardType';
+}
+
 export interface Parameter extends ASTNode {
   kind: 'Parameter';
   typeAnnotation: TypeNode;
   name: string;
+  /** V2: true when the parameter is variadic (`Type... name`) */
+  isVarargs: boolean;
 }
 
 export interface Block extends ASTNode {
@@ -135,7 +156,8 @@ export type Expression =
   | LambdaExpression | AssignmentExpression | TernaryExpression
   | BinaryExpression | UnaryExpression
   | CallExpression | IndexExpression | MemberExpression
-  | CastExpression | ArrayLiteralNode
+  | CastExpression | ArrayLiteralNode | DiscardExpressionNode
+  | PostfixIncrementExpressionNode | PostfixDecrementExpressionNode
   | Identifier | IntegerLiteralNode | FloatLiteralNode | BoolLiteralNode | CharLiteralNode | StringLiteralNode | TemplateLiteralNode | NullLiteralNode;
 
 export interface LambdaExpression extends ASTNode {
@@ -198,6 +220,23 @@ export interface CastExpression extends ASTNode {
 export interface ArrayLiteralNode extends ASTNode {
   kind: 'ArrayLiteral';
   elements: Expression[];
+}
+
+/** V2: discard expression `_` — signals that a value is intentionally unused */
+export interface DiscardExpressionNode extends ASTNode {
+  kind: 'DiscardExpression';
+}
+
+/** V2: postfix increment `expr++` */
+export interface PostfixIncrementExpressionNode extends ASTNode {
+  kind: 'PostfixIncrementExpression';
+  operand: Expression;
+}
+
+/** V2: postfix decrement `expr--` */
+export interface PostfixDecrementExpressionNode extends ASTNode {
+  kind: 'PostfixDecrementExpression';
+  operand: Expression;
 }
 
 export interface Identifier extends ASTNode {

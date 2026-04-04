@@ -16,7 +16,31 @@ This is a monorepo. The packages are:
 
 ## Status
 
-Calynda is currently at 0.1.0.
+Calynda is currently at 0.1.0, shipping Calynda V1 as the canonical release.
+
+**V1 (current release):** The first public edition ships an end-to-end compiler pipeline, a native Linux x86_64 backend, a portable bytecode emitter, a runtime layer for dynamic language features, and a command-line tool that can build and run `.cal` programs.
+
+**V2 (in development):** Calynda V2 is a compatibility-oriented evolution aimed at developers coming from Java 8 or C. V1 remains the canonical shipped language until each V2 slice is parser-complete, semantically specified, and mirrored across compiler and tooling. See [`version_wishlist.md`](version_wishlist.md) for the full V2 specification and phased delivery plan.
+
+V2 agreed surface (see [`version_wishlist.md`](version_wishlist.md) for details):
+
+- Primitive aliases: Java-style aliases (`byte`, `int`, `long`, `double`, etc.) alongside Calynda-native names.
+- V2 import model: plain, alias (`as`), wildcard (`.*`), and selective (`.{a, b, c}`) import forms with explicit `export` declarations and compile-time ambiguity errors.
+- `++` and `--` prefix/postfix operators.
+- Variadic parameters (`Type... name`).
+- Discard expression (`_`).
+- `internal` nested helpers for loop-library extensibility.
+- `static` and `private` top-level initialization.
+- Reified generics with Java-style `<T>`, `<K, V>`, and wildcard `<?>` syntax.
+- Heterogeneous arrays (`arr<?>`) as the replacement for the old struct concept.
+- Tagged unions (every union carries a discriminant tag at runtime).
+
+V2 deferred/rejected (not shipping in V2):
+
+- `manual()` unsafe memory boundary — deferred to V3.
+- `asm()` inline assembly — deferred to V3.
+- Structs and enums — removed from the agreed V2 set.
+- Transitive wildcard imports — deferred past the initial import design.
 
 What is in this first edition:
 
@@ -130,7 +154,7 @@ What they do:
 
 ## Language Snapshot
 
-The grammar lives in [compiler/calynda.ebnf](compiler/calynda.ebnf).
+The grammar lives in [compiler/calynda.ebnf](compiler/calynda.ebnf). This file reflects the agreed V2 grammar surface; see [version_wishlist.md](version_wishlist.md) for the full V2 specification.
 
 Current language surface includes:
 

@@ -1,5 +1,5 @@
 import { PRIMITIVE_TYPES } from '../knowledge/keywords';
-export type CalyndaType = PrimitiveCalyndaType | ArrayCalyndaType | NamedCalyndaType | VoidCalyndaType | UnknownType | LambdaCalyndaType;
+export type CalyndaType = PrimitiveCalyndaType | ArrayCalyndaType | NamedCalyndaType | VoidCalyndaType | UnknownType | LambdaCalyndaType | HeterogeneousArrayCalyndaType | WildcardCalyndaType | UnionCalyndaType;
 export interface PrimitiveCalyndaType {
     kind: 'primitive';
     name: typeof PRIMITIVE_TYPES[number];
@@ -23,6 +23,21 @@ export interface LambdaCalyndaType {
 }
 export interface UnknownType {
     kind: 'unknown';
+}
+/** V2: heterogeneous array type `arr<?>` or `arr<T>` */
+export interface HeterogeneousArrayCalyndaType {
+    kind: 'heterogeneous_array';
+    genericArgs: CalyndaType[];
+}
+/** V2: wildcard generic type argument `?` */
+export interface WildcardCalyndaType {
+    kind: 'wildcard';
+}
+/** V2: tagged union type */
+export interface UnionCalyndaType {
+    kind: 'union';
+    name: string;
+    genericParams: string[];
 }
 export declare function typeToString(t: CalyndaType): string;
 export declare function typesCompatible(a: CalyndaType, b: CalyndaType): boolean;
