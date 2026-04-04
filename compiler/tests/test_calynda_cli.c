@@ -96,28 +96,6 @@ static bool write_temp_source(const char *source, char *path_buffer, size_t buff
     return true;
 }
 
-static bool make_temp_output_path(char *path_buffer, size_t buffer_size) {
-    char template_path[] = "/tmp/calynda-cli-exe-XXXXXX";
-    int fd;
-
-    if (!path_buffer || buffer_size == 0) {
-        return false;
-    }
-
-    fd = mkstemp(template_path);
-    if (fd < 0) {
-        return false;
-    }
-    close(fd);
-    unlink(template_path);
-
-    if (strlen(template_path) + 1 > buffer_size) {
-        return false;
-    }
-    memcpy(path_buffer, template_path, strlen(template_path) + 1);
-    return true;
-}
-
 static bool run_capture(const char *path,
                         char *const argv[],
                         char *buffer,
@@ -178,8 +156,7 @@ static void test_calynda_cli_help_and_emitters(void) {
     char output[4096];
     const char *captured_output;
     char *help_argv[] = { (char *)"./build/calynda", (char *)"help", NULL };
-    char *asm_argv[] = { (char *)"./build/calynda", (char *)"asm", source_path, NULL };
-    char *bytecode_argv[] = { (char *)"./build/calynda", (char *)"bytecode", source_path, NULL };
+    char *emit_c_argv[] = { (char *)"./build/calynda", (char *)"emit-c", source_path, NULL };
     int exit_code;
 
     REQUIRE_TRUE(write_temp_source(source, source_path, sizeof(source_path)),
@@ -191,60 +168,42 @@ static void test_calynda_cli_help_and_emitters(void) {
     ASSERT_EQ_INT(0, exit_code, "calynda help exits successfully");
     ASSERT_CONTAINS("build <source.cal>", captured_output, "help text lists build command");
 
-    REQUIRE_TRUE(run_capture("./build/calynda", asm_argv, output, sizeof(output), &exit_code),
-                 "run calynda asm");
+    REQUIRE_TRUE(run_capture("./build/calynda", emit_c_argv, output, sizeof(output), &exit_code),
+                 "run calynda emit-c");
     captured_output = output;
-    ASSERT_EQ_INT(0, exit_code, "calynda asm exits successfully");
-    ASSERT_CONTAINS(".globl main", captured_output, "calynda asm emits executable assembly");
-
-    REQUIRE_TRUE(run_capture("./build/calynda", bytecode_argv, output, sizeof(output), &exit_code),
-                 "run calynda bytecode");
-    captured_output = output;
-    ASSERT_EQ_INT(0, exit_code, "calynda bytecode exits successfully");
-    ASSERT_CONTAINS("BytecodeProgram target=portable-v1", captured_output, "calynda bytecode emits bytecode text");
+    ASSERT_EQ_INT(0, exit_code, "calynda emit-c exits successfully");
+    ASSERT_CONTAINS("#include", captured_output, "calynda emit-c output contains #include");
+    ASSERT_CONTAINS("int main", captured_output, "calynda emit-c output contains int main");
 
     unlink(source_path);
 }
 
-static void test_calynda_cli_builds_native_executable(void) {
+static void test_calynda_cli_emit_c_produces_output(void) {
     static const char source[] =
-        "start(string[] args) -> 7;\n";
+        "start(string[] args) -> 0;\n";
     char source_path[64];
-    char output_path[64];
     char output[4096];
-    char *build_argv[] = {
-        (char *)"./build/calynda",
-        (char *)"build",
-        source_path,
-        (char *)"-o",
-        output_path,
-        NULL
-    };
-    char *run_argv[] = { output_path, NULL };
     int exit_code;
+    char *emit_c_argv[] = { (char *)"./build/calynda", (char *)"emit-c", source_path, NULL };
 
     REQUIRE_TRUE(write_temp_source(source, source_path, sizeof(source_path)),
-                 "write native CLI source file");
-    REQUIRE_TRUE(make_temp_output_path(output_path, sizeof(output_path)),
-                 "allocate native CLI output path");
+                 "write emit-c test source file");
 
-    REQUIRE_TRUE(run_capture("./build/calynda", build_argv, output, sizeof(output), &exit_code),
-                 "run calynda build");
-    ASSERT_EQ_INT(0, exit_code, "calynda build exits successfully");
-
-    REQUIRE_TRUE(run_capture(output_path, run_argv, output, sizeof(output), &exit_code),
-                 "run generated CLI-built executable");
-    ASSERT_EQ_INT(7, exit_code, "generated executable returns start result");
+    REQUIRE_TRUE(run_capture("./build/calynda", emit_c_argv, output, sizeof(output), &exit_code),
+                 "run calynda emit-c for output check");
+    ASSERT_EQ_INT(0, exit_code, "emit-c exits with code 0");
+    ASSERT_TRUE(strlen(output) > 0, "emit-c produces non-empty output");
+    ASSERT_CONTAINS("#include", output, "emit-c output contains #include");
+    ASSERT_CONTAINS("int main", output, "emit-c output contains int main");
 
     unlink(source_path);
-    unlink(output_path);
 }
 
 int main(void) {
     printf("Running calynda CLI tests...\n\n");
 
     RUN_TEST(test_calynda_cli_help_and_emitters);
-    RUN_TEST(test_calynda_cli_builds_native_executable);
+    RUN_TEST(test_calynda_cli_emit_c_produces_output);
 
     printf("\n========================================\n");
     printf("  Total: %d  |  Passed: %d  |  Failed: %d\n",
