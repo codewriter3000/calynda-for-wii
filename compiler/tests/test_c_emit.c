@@ -191,6 +191,67 @@ static void test_c_emit_returns_zero_without_start(void) {
     hir_program_free(&hir);
 }
 
+static void test_c_emit_boot_entry_point(void) {
+    const char *source =
+        "boot() -> {\n"
+        "    return;\n"
+        "};\n";
+    HirProgram hir;
+    Parser     parser;
+    AstProgram ast;
+    SymbolTable symbols;
+    TypeChecker checker;
+    char *output;
+
+    REQUIRE_TRUE(build_hir(source, &hir, &parser, &ast, &symbols, &checker),
+                 "build HIR for boot program");
+
+    output = emit_to_string(&hir);
+    REQUIRE_TRUE(output != NULL, "c_emit_program succeeds for boot program");
+
+    ASSERT_CONTAINS("__calynda_boot", output, "output contains boot function");
+    ASSERT_CONTAINS("static void __calynda_boot(void)", output, "boot function is void");
+    ASSERT_CONTAINS("(void)argc; (void)argv;", output, "boot main ignores args");
+    ASSERT_CONTAINS("__calynda_boot();", output, "main calls boot");
+
+    free(output);
+    hir_program_free(&hir);
+    type_checker_free(&checker);
+    symbol_table_free(&symbols);
+    ast_program_free(&ast);
+    parser_free(&parser);
+}
+
+static void test_c_emit_extern_declaration(void) {
+    const char *source =
+        "extern int32 printf = c(string fmt, ...);\n"
+        "start(string[] args) -> {\n"
+        "    return 0;\n"
+        "};\n";
+    HirProgram hir;
+    Parser     parser;
+    AstProgram ast;
+    SymbolTable symbols;
+    TypeChecker checker;
+    char *output;
+
+    REQUIRE_TRUE(build_hir(source, &hir, &parser, &ast, &symbols, &checker),
+                 "build HIR for extern program");
+
+    output = emit_to_string(&hir);
+    REQUIRE_TRUE(output != NULL, "c_emit_program succeeds for extern program");
+
+    ASSERT_CONTAINS("extern CalyndaRtWord printf", output,
+                    "output contains extern printf forward declaration");
+
+    free(output);
+    hir_program_free(&hir);
+    type_checker_free(&checker);
+    symbol_table_free(&symbols);
+    ast_program_free(&ast);
+    parser_free(&parser);
+}
+
 /* ------------------------------------------------------------------ */
 
 int main(void) {
@@ -199,6 +260,8 @@ int main(void) {
     RUN_TEST(test_c_emit_simple_start);
     RUN_TEST(test_c_emit_binding_with_lambda);
     RUN_TEST(test_c_emit_returns_zero_without_start);
+    RUN_TEST(test_c_emit_boot_entry_point);
+    RUN_TEST(test_c_emit_extern_declaration);
 
     printf("\n========================================\n");
     printf("  Total: %d  |  Passed: %d  |  Failed: %d\n",

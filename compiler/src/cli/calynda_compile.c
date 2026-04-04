@@ -77,7 +77,7 @@ int calynda_compile_to_c(const char *path, FILE *out) {
         exit_code = 1;
         goto cleanup;
     }
-    if (!c_emit_program(out, &hir_program)) {
+    if (!c_emit_program_with_file(out, &hir_program, path)) {
         fprintf(stderr, "%s: C emission failed\n", path);
         exit_code = 1;
     }

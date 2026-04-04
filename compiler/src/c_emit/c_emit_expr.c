@@ -162,6 +162,10 @@ bool c_emit_expr(CEmitContext *ctx, const HirExpression *expr) {
         case SYMBOL_KIND_LOCAL:
             c_emit_global_name(out, expr->as.symbol.name);
             return true;
+        case SYMBOL_KIND_EXTERN:
+            /* Extern C symbols use the raw C name without __cal_ prefix */
+            c_emit_safe_name(out, expr->as.symbol.name);
+            return true;
         default:
             c_emit_global_name(out, expr->as.symbol.name);
             return true;
@@ -242,15 +246,16 @@ bool c_emit_expr(CEmitContext *ctx, const HirExpression *expr) {
     /* ---- Call ---- */
     case HIR_EXPR_CALL: {
         size_t argc = expr->as.call.argument_count;
+        bool is_extern_call = expr->as.call.callee &&
+                              expr->as.call.callee->kind == HIR_EXPR_SYMBOL &&
+                              expr->as.call.callee->as.symbol.kind == SYMBOL_KIND_EXTERN;
 
-        fputs("__calynda_rt_call_callable(", out);
-        if (!c_emit_expr(ctx, expr->as.call.callee)) {
-            return false;
-        }
-        if (argc == 0) {
-            fputs(", 0, (CalyndaRtWord *)0)", out);
-        } else {
-            fprintf(out, ", %zu, (CalyndaRtWord[]){", argc);
+        if (is_extern_call) {
+            /* Direct C function call for extern symbols */
+            if (!c_emit_expr(ctx, expr->as.call.callee)) {
+                return false;
+            }
+            fputs("(", out);
             for (i = 0; i < argc; i++) {
                 if (i > 0) {
                     fputs(", ", out);
@@ -259,7 +264,26 @@ bool c_emit_expr(CEmitContext *ctx, const HirExpression *expr) {
                     return false;
                 }
             }
-            fputs("})", out);
+            fputs(")", out);
+        } else {
+            fputs("__calynda_rt_call_callable(", out);
+            if (!c_emit_expr(ctx, expr->as.call.callee)) {
+                return false;
+            }
+            if (argc == 0) {
+                fputs(", 0, (CalyndaRtWord *)0)", out);
+            } else {
+                fprintf(out, ", %zu, (CalyndaRtWord[]){", argc);
+                for (i = 0; i < argc; i++) {
+                    if (i > 0) {
+                        fputs(", ", out);
+                    }
+                    if (!c_emit_expr(ctx, expr->as.call.arguments[i])) {
+                        return false;
+                    }
+                }
+                fputs("})", out);
+            }
         }
         return true;
     }

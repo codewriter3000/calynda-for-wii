@@ -25,6 +25,35 @@ bool ast_dump_top_level_decl(AstDumpBuilder *builder, const AstTopLevelDecl *dec
         return ast_dump_expression_label(builder, indent + 1, "BodyExpr",
                                      decl->as.start_decl.body.as.expression);
 
+    case AST_TOP_LEVEL_BOOT:
+        if (!(ast_dump_builder_start_line(builder, indent) &&
+              ast_dump_builder_append(builder, "BootDecl") &&
+              ast_dump_builder_finish_line(builder) &&
+              ast_dump_parameter_list(builder, &decl->as.boot_decl.parameters, indent + 1))) {
+            return false;
+        }
+
+        if (decl->as.boot_decl.body.kind == AST_LAMBDA_BODY_BLOCK) {
+            return ast_dump_block_label(builder, indent + 1, "BodyBlock",
+                                    decl->as.boot_decl.body.as.block);
+        }
+
+        return ast_dump_expression_label(builder, indent + 1, "BodyExpr",
+                                     decl->as.boot_decl.body.as.expression);
+
+    case AST_TOP_LEVEL_EXTERN:
+        if (!(ast_dump_builder_start_line(builder, indent) &&
+              ast_dump_builder_append(builder, "ExternDecl name=") &&
+              ast_dump_builder_append(builder,
+                             decl->as.extern_decl.name ? decl->as.extern_decl.name : "<null>") &&
+              ast_dump_builder_append(builder, " return_type=") &&
+              ast_dump_type(builder, &decl->as.extern_decl.return_type, false) &&
+              ast_dump_builder_finish_line(builder) &&
+              ast_dump_parameter_list(builder, &decl->as.extern_decl.parameters, indent + 1))) {
+            return false;
+        }
+        return true;
+
     case AST_TOP_LEVEL_BINDING:
         if (!(ast_dump_builder_start_line(builder, indent) &&
               ast_dump_builder_append(builder, "BindingDecl name=") &&

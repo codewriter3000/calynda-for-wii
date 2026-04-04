@@ -11,6 +11,8 @@ const char *symbol_kind_name(SymbolKind kind) {
         return "import";
     case SYMBOL_KIND_TOP_LEVEL_BINDING:
         return "top-level binding";
+    case SYMBOL_KIND_EXTERN:
+        return "extern C declaration";
     case SYMBOL_KIND_PARAMETER:
         return "parameter";
     case SYMBOL_KIND_LOCAL:
@@ -32,6 +34,8 @@ const char *scope_kind_name(ScopeKind kind) {
         return "program scope";
     case SCOPE_KIND_START:
         return "start scope";
+    case SCOPE_KIND_BOOT:
+        return "boot scope";
     case SCOPE_KIND_LAMBDA:
         return "lambda scope";
     case SCOPE_KIND_BLOCK:

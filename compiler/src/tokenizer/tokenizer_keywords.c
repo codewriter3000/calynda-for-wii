@@ -13,6 +13,8 @@ static const Keyword keywords[] = {
     {"package",  TOK_PACKAGE},
     {"import",   TOK_IMPORT},
     {"start",    TOK_START},
+    {"boot",     TOK_BOOT},
+    {"extern",   TOK_EXTERN},
     {"var",      TOK_VAR},
     {"public",   TOK_PUBLIC},
     {"private",  TOK_PRIVATE},

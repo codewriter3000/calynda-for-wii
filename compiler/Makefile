@@ -23,7 +23,7 @@ CFLAGS  = -Wall -Wextra -pedantic -std=c11 -g $(INCLUDES)
 
 # Source files
 SRCS      = $(TOKENIZER_DIR)/tokenizer.c $(TOKENIZER_DIR)/tokenizer_keywords.c $(TOKENIZER_DIR)/tokenizer_literals.c $(TOKENIZER_DIR)/tokenizer_punctuation.c $(AST_DIR)/ast.c $(AST_DIR)/ast_expressions.c $(AST_DIR)/ast_statements.c $(AST_DIR)/ast_declarations.c $(PARSER_DIR)/parser.c $(PARSER_DIR)/parser_utils.c $(PARSER_DIR)/parser_types.c $(PARSER_DIR)/parser_decl.c $(PARSER_DIR)/parser_union.c $(PARSER_DIR)/parser_stmt.c $(PARSER_DIR)/parser_expr.c $(PARSER_DIR)/parser_binary.c $(PARSER_DIR)/parser_postfix.c $(PARSER_DIR)/parser_literals.c $(PARSER_DIR)/parser_lookahead.c $(AST_DIR)/ast_dump.c $(AST_DIR)/ast_dump_names.c $(AST_DIR)/ast_dump_types.c $(AST_DIR)/ast_dump_expr.c $(AST_DIR)/ast_dump_stmt.c $(AST_DIR)/ast_dump_decl.c $(SEMA_DIR)/symbol_table.c $(SEMA_DIR)/symbol_table_query.c $(SEMA_DIR)/symbol_table_core.c $(SEMA_DIR)/symbol_table_registry.c $(SEMA_DIR)/symbol_table_imports.c $(SEMA_DIR)/symbol_table_predecl.c $(SEMA_DIR)/symbol_table_analyze.c $(SEMA_DIR)/symbol_table_analyze_expr.c $(SEMA_DIR)/type_resolution.c $(SEMA_DIR)/type_resolution_helpers.c $(SEMA_DIR)/type_resolution_resolve.c $(SEMA_DIR)/type_resolution_expr.c $(SEMA_DIR)/type_checker.c $(SEMA_DIR)/type_checker_check.c $(SEMA_DIR)/type_checker_names.c $(SEMA_DIR)/type_checker_types.c $(SEMA_DIR)/type_checker_convert.c $(SEMA_DIR)/type_checker_util.c $(SEMA_DIR)/type_checker_resolve.c $(SEMA_DIR)/type_checker_lambda.c $(SEMA_DIR)/type_checker_block.c $(SEMA_DIR)/type_checker_ops.c $(SEMA_DIR)/type_checker_expr.c $(SEMA_DIR)/type_checker_expr_ext.c $(SEMA_DIR)/type_checker_expr_more.c $(SEMA_DIR)/semantic_dump.c $(SEMA_DIR)/semantic_dump_builder.c $(SEMA_DIR)/semantic_dump_types.c $(SEMA_DIR)/semantic_dump_scope.c $(SEMA_DIR)/semantic_dump_symbols.c $(HIR_DIR)/hir.c $(HIR_DIR)/hir_memory.c $(HIR_DIR)/hir_helpers.c $(HIR_DIR)/hir_lower.c $(HIR_DIR)/hir_lower_stmt.c $(HIR_DIR)/hir_lower_expr.c $(HIR_DIR)/hir_lower_expr_ext.c $(HIR_DIR)/hir_lower_decls.c $(HIR_DIR)/hir_dump.c $(HIR_DIR)/hir_dump_helpers.c $(HIR_DIR)/hir_dump_expr.c $(HIR_DIR)/hir_dump_expr_ext.c $(RUNTIME_DIR)/runtime.c $(RUNTIME_DIR)/runtime_names.c $(RUNTIME_DIR)/runtime_format.c $(RUNTIME_DIR)/runtime_ops.c $(RUNTIME_DIR)/runtime_union.c $(C_EMIT_DIR)/c_emit.c $(C_EMIT_DIR)/c_emit_type.c $(C_EMIT_DIR)/c_emit_names.c $(C_EMIT_DIR)/c_emit_expr.c $(C_EMIT_DIR)/c_emit_stmt.c $(C_EMIT_DIR)/c_emit_closure.c $(C_RUNTIME_DIR)/calynda_gc_refcount.c $(C_RUNTIME_DIR)/calynda_runtime.c
-TEST_SRCS = $(TEST_DIR)/test_tokenizer.c $(TEST_DIR)/test_ast.c $(TEST_DIR)/test_parser.c $(TEST_DIR)/test_ast_dump.c $(TEST_DIR)/test_symbol_table.c $(TEST_DIR)/test_type_resolution.c $(TEST_DIR)/test_type_checker.c $(TEST_DIR)/test_semantic_dump.c $(TEST_DIR)/test_hir_dump.c $(TEST_DIR)/test_runtime.c $(TEST_DIR)/test_calynda_cli.c $(TEST_DIR)/test_c_emit.c
+TEST_SRCS = $(TEST_DIR)/test_tokenizer.c $(TEST_DIR)/test_ast.c $(TEST_DIR)/test_parser.c $(TEST_DIR)/test_ast_dump.c $(TEST_DIR)/test_symbol_table.c $(TEST_DIR)/test_type_resolution.c $(TEST_DIR)/test_type_checker.c $(TEST_DIR)/test_semantic_dump.c $(TEST_DIR)/test_hir_dump.c $(TEST_DIR)/test_runtime.c $(TEST_DIR)/test_calynda_cli.c $(TEST_DIR)/test_c_emit.c $(TEST_DIR)/test_c_compile.c
 
 # Object files
 TOKENIZER_OBJS       = $(BUILD_DIR)/tokenizer.o $(BUILD_DIR)/tokenizer_keywords.o $(BUILD_DIR)/tokenizer_literals.o $(BUILD_DIR)/tokenizer_punctuation.o
@@ -54,6 +54,7 @@ TEST_HIR_DUMP_OBJS   = $(BUILD_DIR)/test_hir_dump.o
 TEST_RUNTIME_OBJS    = $(BUILD_DIR)/test_runtime.o
 TEST_CALYNDA_CLI_OBJS = $(BUILD_DIR)/test_calynda_cli.o
 TEST_C_EMIT_OBJS     = $(BUILD_DIR)/test_c_emit.o
+TEST_C_COMPILE_OBJS  = $(BUILD_DIR)/test_c_compile.o
 
 # Test binaries
 TEST_TOKENIZER_BIN = $(BUILD_DIR)/test_tokenizer
@@ -68,7 +69,8 @@ TEST_HIR_DUMP_BIN   = $(BUILD_DIR)/test_hir_dump
 TEST_RUNTIME_BIN   = $(BUILD_DIR)/test_runtime
 TEST_CALYNDA_CLI_BIN = $(BUILD_DIR)/test_calynda_cli
 TEST_C_EMIT_BIN    = $(BUILD_DIR)/test_c_emit
-TEST_BINS          = $(TEST_TOKENIZER_BIN) $(TEST_AST_BIN) $(TEST_PARSER_BIN) $(TEST_AST_DUMP_BIN) $(TEST_SYMBOL_TABLE_BIN) $(TEST_TYPE_RESOLUTION_BIN) $(TEST_TYPE_CHECKER_BIN) $(TEST_SEMANTIC_DUMP_BIN) $(TEST_HIR_DUMP_BIN) $(TEST_RUNTIME_BIN) $(TEST_CALYNDA_CLI_BIN) $(TEST_C_EMIT_BIN)
+TEST_C_COMPILE_BIN = $(BUILD_DIR)/test_c_compile
+TEST_BINS          = $(TEST_TOKENIZER_BIN) $(TEST_AST_BIN) $(TEST_PARSER_BIN) $(TEST_AST_DUMP_BIN) $(TEST_SYMBOL_TABLE_BIN) $(TEST_TYPE_RESOLUTION_BIN) $(TEST_TYPE_CHECKER_BIN) $(TEST_SEMANTIC_DUMP_BIN) $(TEST_HIR_DUMP_BIN) $(TEST_RUNTIME_BIN) $(TEST_CALYNDA_CLI_BIN) $(TEST_C_EMIT_BIN) $(TEST_C_COMPILE_BIN)
 
 # Tool binaries
 DUMP_AST_BIN       = $(BUILD_DIR)/dump_ast
@@ -412,6 +414,12 @@ $(TEST_CALYNDA_CLI_BIN): $(TEST_CALYNDA_CLI_OBJS) $(CALYNDA_BIN)
 $(TEST_C_EMIT_BIN): $(TOKENIZER_OBJS) $(AST_OBJS) $(PARSER_OBJS) $(SYMBOL_TABLE_OBJS) $(TYPE_RESOLUTION_OBJS) $(TYPE_CHECKER_OBJS) $(HIR_OBJS) $(C_EMIT_OBJS) $(C_RUNTIME_OBJS) $(TEST_C_EMIT_OBJS)
 	$(CC) $(CFLAGS) $^ -o $@
 
+$(BUILD_DIR)/test_c_compile.o: $(TEST_DIR)/test_c_compile.c $(C_EMIT_DIR)/c_emit.h $(HIR_DIR)/hir.h $(SEMA_DIR)/type_checker.h $(SEMA_DIR)/symbol_table.h $(PARSER_DIR)/parser.h | $(BUILD_DIR)
+	$(CC) $(CFLAGS) -c $< -o $@
+
+$(TEST_C_COMPILE_BIN): $(TOKENIZER_OBJS) $(AST_OBJS) $(PARSER_OBJS) $(SYMBOL_TABLE_OBJS) $(TYPE_RESOLUTION_OBJS) $(TYPE_CHECKER_OBJS) $(HIR_OBJS) $(C_EMIT_OBJS) $(C_RUNTIME_OBJS) $(TEST_C_COMPILE_OBJS)
+	$(CC) $(CFLAGS) $^ -o $@
+
 $(DUMP_AST_BIN): $(TOKENIZER_OBJS) $(AST_OBJS) $(PARSER_OBJS) $(AST_DUMP_OBJS) $(DUMP_AST_OBJS)
 	$(CC) $(CFLAGS) $^ -o $@
 
@@ -437,6 +445,7 @@ test: $(TEST_BINS)
 	./$(TEST_RUNTIME_BIN)
 	./$(TEST_CALYNDA_CLI_BIN)
 	./$(TEST_C_EMIT_BIN)
+	./$(TEST_C_COMPILE_BIN)
 
 dump_ast: $(DUMP_AST_BIN)
 

@@ -3,7 +3,7 @@
 bool tc_validate_program_start_decls(TypeChecker *checker,
                                      const AstProgram *program) {
     const AstStartDecl *first_start = NULL;
-    const AstStartDecl *duplicate_start = NULL;
+    const AstBootDecl  *first_boot  = NULL;
     size_t i;
 
     if (!checker || !program) {
@@ -13,29 +13,48 @@ bool tc_validate_program_start_decls(TypeChecker *checker,
     for (i = 0; i < program->top_level_count; i++) {
         const AstTopLevelDecl *decl = program->top_level_decls[i];
 
-        if (!decl || decl->kind != AST_TOP_LEVEL_START) {
+        if (!decl) {
             continue;
         }
 
-        if (!first_start) {
+        if (decl->kind == AST_TOP_LEVEL_START) {
+            if (first_start) {
+                tc_set_error_at(checker,
+                                decl->as.start_decl.start_span,
+                                &first_start->start_span,
+                                "Program cannot declare multiple start entry points.");
+                return false;
+            }
+            if (first_boot) {
+                tc_set_error_at(checker,
+                                decl->as.start_decl.start_span,
+                                &first_boot->boot_span,
+                                "Program cannot declare both start() and boot() entry points.");
+                return false;
+            }
             first_start = &decl->as.start_decl;
-        } else {
-            duplicate_start = &decl->as.start_decl;
-            break;
+        } else if (decl->kind == AST_TOP_LEVEL_BOOT) {
+            if (first_boot) {
+                tc_set_error_at(checker,
+                                decl->as.boot_decl.boot_span,
+                                &first_boot->boot_span,
+                                "Program cannot declare multiple boot entry points.");
+                return false;
+            }
+            if (first_start) {
+                tc_set_error_at(checker,
+                                decl->as.boot_decl.boot_span,
+                                &first_start->start_span,
+                                "Program cannot declare both start() and boot() entry points.");
+                return false;
+            }
+            first_boot = &decl->as.boot_decl;
         }
     }
 
-    if (!first_start) {
+    if (!first_start && !first_boot) {
         tc_set_error(checker,
-                     "Program must declare exactly one start entry point.");
-        return false;
-    }
-
-    if (duplicate_start) {
-        tc_set_error_at(checker,
-                        duplicate_start->start_span,
-                        &first_start->start_span,
-                        "Program cannot declare multiple start entry points.");
+                     "Program must declare exactly one entry point (start() or boot()).");
         return false;
     }
 
@@ -103,6 +122,18 @@ const TypeCheckInfo *tc_resolve_symbol_info(TypeChecker *checker,
             return NULL;
         }
         break;
+
+    case SYMBOL_KIND_EXTERN: {
+        /* Extern C declaration: treat as a callable with external linkage. */
+        CheckedType return_type = tc_checked_type_from_ast_type(checker, symbol->declared_type);
+        if (checker->has_error) {
+            entry->is_resolving = false;
+            return NULL;
+        }
+        resolved_info = tc_type_check_info_make_external_callable();
+        resolved_info.callable_return_type = return_type;
+        break;
+    }
 
     case SYMBOL_KIND_LOCAL:
         if (!tc_resolve_binding_symbol(checker,

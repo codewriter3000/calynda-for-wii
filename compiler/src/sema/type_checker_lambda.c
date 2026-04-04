@@ -201,3 +201,47 @@ bool tc_check_start_decl(TypeChecker *checker, const AstStartDecl *start_decl) {
 
     return true;
 }
+
+bool tc_check_boot_decl(TypeChecker *checker, const AstBootDecl *boot_decl) {
+    const Scope *boot_scope;
+
+    boot_scope = symbol_table_find_scope(checker->symbols, boot_decl, SCOPE_KIND_BOOT);
+    if (!boot_scope) {
+        tc_set_error_at(checker, boot_decl->boot_span, NULL,
+                        "Internal error: missing boot scope.");
+        return false;
+    }
+
+    if (!tc_resolve_parameters_in_scope(checker, &boot_decl->parameters, boot_scope)) {
+        return false;
+    }
+
+    if (boot_decl->body.kind == AST_LAMBDA_BODY_BLOCK) {
+        BlockContext context;
+        CheckedType body_type;
+        AstSourceSpan body_span;
+
+        memset(&context, 0, sizeof(context));
+        context.kind = BLOCK_CONTEXT_BOOT;
+        context.has_expected_return_type = false;
+        context.owner_span = boot_decl->boot_span;
+        context.related_span = boot_decl->boot_span;
+        context.has_related_span = true;
+
+        if (!tc_check_block(checker,
+                            boot_decl->body.as.block,
+                            &context,
+                            &body_type,
+                            &body_span)) {
+            return false;
+        }
+    } else {
+        const TypeCheckInfo *body_info = tc_check_expression(checker, boot_decl->body.as.expression);
+
+        if (!body_info) {
+            return false;
+        }
+    }
+
+    return true;
+}

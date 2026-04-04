@@ -9,11 +9,15 @@ bool st_analyze_top_level_decl(SymbolTable *table,
     switch (decl->kind) {
     case AST_TOP_LEVEL_START:
         return st_analyze_start_decl(table, &decl->as.start_decl, scope);
+    case AST_TOP_LEVEL_BOOT:
+        return st_analyze_boot_decl(table, &decl->as.boot_decl, scope);
     case AST_TOP_LEVEL_BINDING:
         return st_analyze_expression(table, decl->as.binding_decl.initializer, scope);
-
     case AST_TOP_LEVEL_UNION:
         return st_analyze_union_decl(table, &decl->as.union_decl, scope);
+    case AST_TOP_LEVEL_EXTERN:
+        /* extern declarations have no body to analyze */
+        return true;
     }
 
     return false;
@@ -36,6 +40,25 @@ bool st_analyze_start_decl(SymbolTable *table, const AstStartDecl *start_decl,
     }
 
     return st_analyze_expression(table, start_decl->body.as.expression, start_scope);
+}
+
+bool st_analyze_boot_decl(SymbolTable *table, const AstBootDecl *boot_decl,
+                          Scope *parent_scope) {
+    Scope *boot_scope = st_scope_new(table, SCOPE_KIND_BOOT, boot_decl, parent_scope);
+
+    if (!boot_scope) {
+        return false;
+    }
+
+    if (!st_add_parameter_symbols(table, &boot_decl->parameters, boot_scope)) {
+        return false;
+    }
+
+    if (boot_decl->body.kind == AST_LAMBDA_BODY_BLOCK) {
+        return st_analyze_block(table, boot_decl->body.as.block, boot_scope);
+    }
+
+    return st_analyze_expression(table, boot_decl->body.as.expression, boot_scope);
 }
 
 bool st_analyze_union_decl(SymbolTable *table, const AstUnionDecl *union_decl,

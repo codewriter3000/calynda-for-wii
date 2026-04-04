@@ -96,6 +96,37 @@ bool st_predeclare_top_level_bindings(SymbolTable *table, const AstProgram *prog
                 st_symbol_free(symbol);
                 return false;
             }
+        } else if (decl->kind == AST_TOP_LEVEL_EXTERN) {
+            const AstExternDecl *extern_decl = &decl->as.extern_decl;
+            const Symbol *conflicting_symbol = scope_lookup_local(table->root_scope,
+                                                                  extern_decl->name);
+            Symbol *symbol;
+
+            if (conflicting_symbol) {
+                st_set_error_at(table,
+                                extern_decl->name_span,
+                                &conflicting_symbol->declaration_span,
+                                "Duplicate symbol '%s' in %s.",
+                                extern_decl->name,
+                                scope_kind_name(table->root_scope->kind));
+                return false;
+            }
+
+            symbol = st_symbol_new(table, SYMBOL_KIND_EXTERN,
+                                   extern_decl->name, NULL,
+                                   &extern_decl->return_type,
+                                   false, false, false, false, false,
+                                   extern_decl->name_span,
+                                   extern_decl,
+                                   table->root_scope);
+            if (!symbol) {
+                return false;
+            }
+
+            if (!st_scope_append_symbol(table, table->root_scope, symbol)) {
+                st_symbol_free(symbol);
+                return false;
+            }
         }
     }
 
