@@ -115,11 +115,23 @@ bool calynda_write_temp_file(const char *prefix,
     return true;
 }
 
-int calynda_run_linker(const char *assembly_path,
-                       const char *runtime_object_path,
-                       const char *output_path) {
+int calynda_run_c_compiler(const char *c_source_path,
+                           const char *runtime_include_dir,
+                           const char *runtime_lib_dir,
+                           const char *output_path,
+                           const char *target) {
     pid_t child;
     int status;
+    char lib_flag[PATH_MAX + 3];
+    char inc_flag[PATH_MAX + 3];
+
+    if (!c_source_path || !runtime_include_dir || !runtime_lib_dir ||
+        !output_path || !target) {
+        return -1;
+    }
+
+    snprintf(inc_flag, sizeof(inc_flag), "-I%s", runtime_include_dir);
+    snprintf(lib_flag, sizeof(lib_flag), "-L%s", runtime_lib_dir);
 
     child = fork();
     if (child < 0) {
@@ -127,18 +139,40 @@ int calynda_run_linker(const char *assembly_path,
     }
 
     if (child == 0) {
-        execlp("gcc",
-               "gcc",
-               "-no-pie",
-               "-x",
-               "assembler",
-               assembly_path,
-               "-x",
-               "none",
-               runtime_object_path,
-               "-o",
-               output_path,
-               (char *)NULL);
+        if (strcmp(target, "wii") == 0) {
+            char output_elf[PATH_MAX];
+            snprintf(output_elf, sizeof(output_elf), "%s.elf", output_path);
+            execlp("powerpc-eabi-gcc",
+                   "powerpc-eabi-gcc",
+                   "-o", output_elf,
+                   c_source_path,
+                   inc_flag,
+                   "-lcalynda_runtime",
+                   lib_flag,
+                   "-mrvl", "-mcpu=750", "-meabi", "-mhard-float",
+                   (char *)NULL);
+        } else if (strcmp(target, "gc") == 0) {
+            char output_dol[PATH_MAX];
+            snprintf(output_dol, sizeof(output_dol), "%s.dol", output_path);
+            execlp("powerpc-eabi-gcc",
+                   "powerpc-eabi-gcc",
+                   "-o", output_dol,
+                   c_source_path,
+                   inc_flag,
+                   "-lcalynda_runtime",
+                   lib_flag,
+                   "-mrvl", "-mcpu=750", "-meabi", "-mhard-float",
+                   (char *)NULL);
+        } else {
+            execlp("gcc",
+                   "gcc",
+                   "-o", output_path,
+                   c_source_path,
+                   inc_flag,
+                   "-lcalynda_runtime",
+                   lib_flag,
+                   (char *)NULL);
+        }
         _exit(127);
     }
 

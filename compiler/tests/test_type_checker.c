@@ -928,7 +928,7 @@ static void test_type_checker_rejects_varargs_type_mismatch(void) {
 static void test_type_checker_handles_java_primitive_aliases(void) {
     const char *source =
         "int x = () -> 42;\n"
-        "double pi = () -> 3.14;\n"
+        "float pi = () -> 3.14;\n"
         "start(string[] args) -> {\n"
         "    var result = x() + int(pi());\n"
         "    return result;\n"

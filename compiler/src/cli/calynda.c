@@ -1,4 +1,4 @@
-#define _POSIX_C_SOURCE 200809L
+#define _GNU_SOURCE
 
 #include "calynda_internal.h"
 
@@ -6,13 +6,15 @@
 #include <string.h>
 #include <unistd.h>
 
-static bool parse_build_output(int argc,
-                               char **argv,
-                               const char *default_output,
-                               const char **output_path);
+static bool parse_build_args(int argc, char **argv,
+                             const char *default_output,
+                             const char **output_path,
+                             const char **target);
 static void print_usage(FILE *out, const char *program_name);
-static int emit_program_file(const char *path, CalyndaEmitMode mode);
-static int build_program_file(const char *source_path, const char *output_path);
+static int emit_c_program_file(const char *path);
+static int build_program_file(const char *source_path,
+                              const char *output_path,
+                              const char *target);
 static int run_program_file(const char *source_path, int argc, char **argv);
 
 int main(int argc, char **argv) {
@@ -28,22 +30,16 @@ int main(int argc, char **argv) {
         print_usage(stdout, program_name);
         return 0;
     }
-    if (strcmp(argv[1], "asm") == 0) {
+    if (strcmp(argv[1], "emit-c") == 0) {
         if (argc != 3) {
             print_usage(stderr, program_name);
             return 64;
         }
-        return emit_program_file(argv[2], CALYNDA_EMIT_MODE_ASM);
-    }
-    if (strcmp(argv[1], "bytecode") == 0) {
-        if (argc != 3) {
-            print_usage(stderr, program_name);
-            return 64;
-        }
-        return emit_program_file(argv[2], CALYNDA_EMIT_MODE_BYTECODE);
+        return emit_c_program_file(argv[2]);
     }
     if (strcmp(argv[1], "build") == 0) {
         const char *output_path;
+        const char *target;
         char default_output[PATH_MAX];
         const char *source_path;
         const char *slash;
@@ -70,11 +66,11 @@ int main(int argc, char **argv) {
             fprintf(stderr, "failed to build default output path\n");
             return 1;
         }
-        if (!parse_build_output(argc - 3, argv + 3, default_output, &output_path)) {
+        if (!parse_build_args(argc - 3, argv + 3, default_output, &output_path, &target)) {
             print_usage(stderr, program_name);
             return 64;
         }
-        return build_program_file(source_path, output_path);
+        return build_program_file(source_path, output_path, target);
     }
     if (strcmp(argv[1], "run") == 0) {
         if (argc < 3) {
@@ -88,120 +84,99 @@ int main(int argc, char **argv) {
     return 64;
 }
 
-static bool parse_build_output(int argc,
-                               char **argv,
-                               const char *default_output,
-                               const char **output_path) {
-    if (!output_path || !default_output) {
+static bool parse_build_args(int argc, char **argv,
+                             const char *default_output,
+                             const char **output_path,
+                             const char **target) {
+    int i;
+
+    if (!output_path || !default_output || !target) {
         return false;
     }
 
     *output_path = default_output;
-    if (argc == 0) {
-        return true;
+    *target = "host";
+
+    for (i = 0; i < argc; i++) {
+        if (strcmp(argv[i], "-o") == 0 && i + 1 < argc) {
+            *output_path = argv[i + 1];
+            i++;
+        } else if (strcmp(argv[i], "--target") == 0 && i + 1 < argc) {
+            *target = argv[i + 1];
+            i++;
+        } else {
+            return false;
+        }
     }
-    if (argc == 2 && strcmp(argv[0], "-o") == 0) {
-        *output_path = argv[1];
-        return true;
-    }
-    return false;
+    return true;
 }
 
 static void print_usage(FILE *out, const char *program_name) {
     fprintf(out, "Usage: %s <command> ...\n", program_name);
     fprintf(out, "\nCommands:\n");
-    fprintf(out, "  build <source.cal> [-o output]   Build a native executable\n");
-    fprintf(out, "  run <source.cal> [args...]       Build a temp executable and run it\n");
-    fprintf(out, "  asm <source.cal>                 Emit x86_64 assembly to stdout\n");
-    fprintf(out, "  bytecode <source.cal>            Emit portable bytecode text to stdout\n");
-    fprintf(out, "  help                             Show this help\n");
+    fprintf(out, "  build <source.cal> [-o output] [--target host|wii|gc]   Build an executable via C\n");
+    fprintf(out, "  run <source.cal> [args...]                               Build a temp executable and run it\n");
+    fprintf(out, "  emit-c <source.cal>                                      Emit generated C to stdout\n");
+    fprintf(out, "  help                                                     Show this help\n");
 }
 
-static int emit_program_file(const char *path, CalyndaEmitMode mode) {
+static int emit_c_program_file(const char *path) {
+    return calynda_compile_to_c(path, stdout);
+}
+
+static int build_program_file(const char *source_path,
+                              const char *output_path,
+                              const char *target) {
+    char c_path[PATH_MAX];
+    char include_dir[PATH_MAX];
+    char lib_dir[PATH_MAX];
     int exit_code;
+    FILE *c_file;
 
-    if (mode == CALYNDA_EMIT_MODE_ASM) {
-        MachineProgram machine_program;
-
-        exit_code = calynda_compile_to_machine_program(path, &machine_program);
-        if (exit_code != 0) {
-            return exit_code;
-        }
-        if (!asm_emit_program(stdout, &machine_program)) {
-            fprintf(stderr, "%s: failed to write assembly output\n", path);
-            exit_code = 1;
-        }
-        machine_program_free(&machine_program);
-        return exit_code;
-    }
-
+    /* Write generated C to a temp file */
     {
-        BytecodeProgram bytecode_program;
-
-        exit_code = calynda_compile_to_bytecode_program(path, &bytecode_program);
-        if (exit_code != 0) {
-            return exit_code;
+        char template_path[] = "/tmp/calynda-c-XXXXXX.c";
+        int fd;
+#ifdef __linux__
+        fd = mkstemps(template_path, 2);
+#else
+        fd = mkstemp(template_path);
+#endif
+        if (fd < 0) {
+            fprintf(stderr, "%s: failed to create temp C file\n", source_path);
+            return 1;
         }
-        if (!bytecode_dump_program(stdout, &bytecode_program)) {
-            fprintf(stderr, "%s: failed to write bytecode output\n", path);
-            exit_code = 1;
+        c_file = fdopen(fd, "w");
+        if (!c_file) {
+            close(fd);
+            fprintf(stderr, "%s: failed to open temp C file\n", source_path);
+            return 1;
         }
-        bytecode_program_free(&bytecode_program);
+        memcpy(c_path, template_path, sizeof(template_path));
     }
-    return exit_code;
-}
 
-static int build_program_file(const char *source_path, const char *output_path) {
-    MachineProgram machine_program;
-    char *assembly;
-    char assembly_path[PATH_MAX];
-    char executable_dir[PATH_MAX];
-    char runtime_object_path[PATH_MAX];
-    int link_exit_code;
-    int exit_code;
-
-    exit_code = calynda_compile_to_machine_program(source_path, &machine_program);
+    exit_code = calynda_compile_to_c(source_path, c_file);
+    fclose(c_file);
     if (exit_code != 0) {
+        unlink(c_path);
         return exit_code;
     }
 
-    assembly = asm_emit_program_to_string(&machine_program);
-    machine_program_free(&machine_program);
-    if (!assembly) {
-        fprintf(stderr, "%s: failed to render native assembly\n", source_path);
-        return 1;
+    /* Resolve runtime paths relative to the calynda executable */
+    if (!calynda_executable_directory(include_dir, sizeof(include_dir))) {
+        strcpy(include_dir, "build");
     }
-    if (!calynda_write_temp_file("calynda-native", assembly, assembly_path, sizeof(assembly_path))) {
-        fprintf(stderr, "%s: failed to create temporary assembly file\n", source_path);
-        free(assembly);
-        return 1;
-    }
-    if (!calynda_executable_directory(executable_dir, sizeof(executable_dir))) {
-        strcpy(executable_dir, "build");
-    }
-    if (snprintf(runtime_object_path,
-                 sizeof(runtime_object_path),
-                 "%s/calynda_runtime.a",
-                 executable_dir) < 0) {
-        fprintf(stderr, "%s: failed to resolve runtime object path\n", source_path);
-        unlink(assembly_path);
-        free(assembly);
-        return 1;
-    }
+    memcpy(lib_dir, include_dir, strlen(include_dir) + 1);
 
-    link_exit_code = calynda_run_linker(assembly_path, runtime_object_path, output_path);
-    if (link_exit_code != 0) {
+    exit_code = calynda_run_c_compiler(c_path, include_dir, lib_dir, output_path, target);
+    if (exit_code != 0) {
         fprintf(stderr,
-                "%s: native link failed (gcc exit %d). Preserved assembly at %s\n",
-                source_path,
-                link_exit_code,
-                assembly_path);
-        free(assembly);
+                "%s: C compilation failed (exit %d). Preserved C source at %s\n",
+                source_path, exit_code, c_path);
         return 1;
     }
 
-    unlink(assembly_path);
-    free(assembly);
+    unlink(c_path);
     return 0;
 }
 
@@ -222,7 +197,7 @@ static int run_program_file(const char *source_path, int argc, char **argv) {
     unlink(template_path);
     memcpy(executable_path, template_path, sizeof(template_path));
 
-    exit_code = build_program_file(source_path, executable_path);
+    exit_code = build_program_file(source_path, executable_path, "host");
     if (exit_code != 0) {
         unlink(executable_path);
         return exit_code;

@@ -54,17 +54,17 @@ static void test_keywords(void) {
     const char *src =
         "package import start var public private final void "
         "return exit throw true false null "
-        "int8 int16 int32 int64 uint8 uint16 uint32 uint64 "
-        "float32 float64 bool char string "
+        "int8 int16 int32 uint8 uint16 uint32 "
+        "float32 bool char string "
         "export as internal static union manual arr";
 
     TokenType expected[] = {
         TOK_PACKAGE, TOK_IMPORT, TOK_START, TOK_VAR,
         TOK_PUBLIC, TOK_PRIVATE, TOK_FINAL, TOK_VOID,
         TOK_RETURN, TOK_EXIT, TOK_THROW, TOK_TRUE, TOK_FALSE, TOK_NULL,
-        TOK_INT8, TOK_INT16, TOK_INT32, TOK_INT64,
-        TOK_UINT8, TOK_UINT16, TOK_UINT32, TOK_UINT64,
-        TOK_FLOAT32, TOK_FLOAT64, TOK_BOOL, TOK_CHAR, TOK_STRING,
+        TOK_INT8, TOK_INT16, TOK_INT32,
+        TOK_UINT8, TOK_UINT16, TOK_UINT32,
+        TOK_FLOAT32, TOK_BOOL, TOK_CHAR, TOK_STRING,
         TOK_EXPORT, TOK_AS, TOK_INTERNAL, TOK_STATIC, TOK_UNION, TOK_MANUAL, TOK_ARR,
         TOK_EOF
     };
