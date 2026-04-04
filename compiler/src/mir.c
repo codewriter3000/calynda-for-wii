@@ -198,6 +198,10 @@ static bool lower_template_part_value(MirUnitBuildContext *context,
 static bool lower_template_expression(MirUnitBuildContext *context,
                                       const HirExpression *expression,
                                       MirValue *value);
+static bool lower_postfix_increment_expression(MirUnitBuildContext *context,
+                                               const HirExpression *expression,
+                                               MirValue *value,
+                                               bool is_increment);
 static bool lower_member_expression(MirUnitBuildContext *context,
                                     const HirExpression *expression,
                                     MirValue *value);
@@ -227,6 +231,99 @@ static bool lower_lambda_unit(MirBuildContext *context,
 static bool lower_start_unit(MirBuildContext *context,
                              const HirStartDecl *start_decl,
                              bool call_module_init);
+
+static bool is_union_variant_call(const HirExpression *expression,
+                                  const char **out_union_name,
+                                  const char **out_variant_name) {
+    const HirExpression *callee;
+    const HirExpression *target;
+
+    if (!expression || expression->kind != HIR_EXPR_CALL) {
+        return false;
+    }
+
+    callee = expression->as.call.callee;
+    if (!callee || callee->kind != HIR_EXPR_MEMBER) {
+        return false;
+    }
+
+    target = callee->as.member.target;
+    if (!target || target->kind != HIR_EXPR_SYMBOL) {
+        return false;
+    }
+
+    if (target->as.symbol.kind != SYMBOL_KIND_UNION) {
+        return false;
+    }
+
+    if (out_union_name) {
+        *out_union_name = target->as.symbol.name;
+    }
+    if (out_variant_name) {
+        *out_variant_name = callee->as.member.member;
+    }
+    return true;
+}
+
+static bool is_union_variant_member(const HirExpression *expression,
+                                    const char **out_union_name,
+                                    const char **out_variant_name) {
+    const HirExpression *target;
+
+    if (!expression || expression->kind != HIR_EXPR_MEMBER) {
+        return false;
+    }
+
+    target = expression->as.member.target;
+    if (!target || target->kind != HIR_EXPR_SYMBOL) {
+        return false;
+    }
+
+    if (target->as.symbol.kind != SYMBOL_KIND_UNION) {
+        return false;
+    }
+
+    if (out_union_name) {
+        *out_union_name = target->as.symbol.name;
+    }
+    if (out_variant_name) {
+        *out_variant_name = expression->as.member.member;
+    }
+    return true;
+}
+
+static bool find_hir_union_variant(const MirBuildContext *build,
+                                   const char *union_name,
+                                   const char *variant_name,
+                                   size_t *out_variant_index,
+                                   size_t *out_variant_count) {
+    size_t d, v;
+    const HirProgram *hir = build->hir_program;
+
+    for (d = 0; d < hir->top_level_count; d++) {
+        const HirTopLevelDecl *decl = hir->top_level_decls[d];
+        if (decl->kind != HIR_TOP_LEVEL_UNION) {
+            continue;
+        }
+        if (!decl->as.union_decl.name || strcmp(decl->as.union_decl.name, union_name) != 0) {
+            continue;
+        }
+        if (out_variant_count) {
+            *out_variant_count = decl->as.union_decl.variant_count;
+        }
+        for (v = 0; v < decl->as.union_decl.variant_count; v++) {
+            if (decl->as.union_decl.variants[v].name &&
+                strcmp(decl->as.union_decl.variants[v].name, variant_name) == 0) {
+                if (out_variant_index) {
+                    *out_variant_index = v;
+                }
+                return true;
+            }
+        }
+        return false;
+    }
+    return false;
+}
 
 void mir_program_init(MirProgram *program) {
     if (!program) {
@@ -656,6 +753,18 @@ static bool collect_expression_captures(MirBuildContext *context,
             }
         }
         return true;
+    case HIR_EXPR_DISCARD:
+        return true;
+    case HIR_EXPR_POST_INCREMENT:
+        return collect_expression_captures(context,
+                                           expression->as.post_increment.operand,
+                                           bound,
+                                           captures);
+    case HIR_EXPR_POST_DECREMENT:
+        return collect_expression_captures(context,
+                                           expression->as.post_decrement.operand,
+                                           bound,
+                                           captures);
     }
 
     return true;
@@ -933,6 +1042,19 @@ static void mir_instruction_free(MirInstruction *instruction) {
         mir_value_free(&instruction->as.store_member.target);
         free(instruction->as.store_member.member);
         mir_value_free(&instruction->as.store_member.value);
+        break;
+    case MIR_INSTR_HETERO_ARRAY_NEW:
+        for (i = 0; i < instruction->as.hetero_array_new.element_count; i++) {
+            mir_value_free(&instruction->as.hetero_array_new.elements[i]);
+        }
+        free(instruction->as.hetero_array_new.elements);
+        free(instruction->as.hetero_array_new.element_types);
+        break;
+    case MIR_INSTR_UNION_NEW:
+        free(instruction->as.union_new.union_name);
+        if (instruction->as.union_new.has_payload) {
+            mir_value_free(&instruction->as.union_new.payload);
+        }
         break;
     }
 
@@ -1935,6 +2057,140 @@ static bool lower_assignment_expression(MirUnitBuildContext *context,
     return true;
 }
 
+static bool lower_postfix_increment_expression(MirUnitBuildContext *context,
+                                               const HirExpression *expression,
+                                               MirValue *value,
+                                               bool is_increment) {
+    MirLValue lvalue;
+    MirValue current_value;
+    MirValue stored_value;
+    MirValue one_literal;
+    MirInstruction instruction;
+
+    memset(&lvalue, 0, sizeof(lvalue));
+    current_value = mir_invalid_value();
+    stored_value = mir_invalid_value();
+
+    /* The operand is the HIR expression for the variable (e.g. `c`). */
+    {
+        const HirExpression *operand = is_increment
+            ? expression->as.post_increment.operand
+            : expression->as.post_decrement.operand;
+
+        if (!lower_assignment_target(context, operand, &lvalue)) {
+            return false;
+        }
+
+        if (!load_lvalue_value(context, &lvalue,
+                               expression->source_span, &current_value)) {
+            mir_lvalue_free(&lvalue);
+            return false;
+        }
+    }
+
+    /* Save the original value into a temporary (the result of the expression). */
+    {
+        MirValue saved;
+
+        if (!mir_value_clone(context->build, &current_value, &saved)) {
+            mir_lvalue_free(&lvalue);
+            mir_value_free(&current_value);
+            return false;
+        }
+
+        if (!append_synthetic_local(context, "postfix_old",
+                                    expression->type,
+                                    expression->source_span,
+                                    NULL)) {
+            mir_lvalue_free(&lvalue);
+            mir_value_free(&current_value);
+            mir_value_free(&saved);
+            return false;
+        }
+
+        /* We need the old value in a temp so the binary instruction doesn't
+           lose it when the store overwrites the variable. */
+        memset(&instruction, 0, sizeof(instruction));
+        instruction.kind = MIR_INSTR_BINARY;
+        instruction.as.binary.dest_temp = context->unit->next_temp_index++;
+        instruction.as.binary.operator = AST_BINARY_OP_ADD;
+        instruction.as.binary.left = saved;
+
+        /* literal 0 so that old_temp = current + 0 = current */
+        one_literal.kind = MIR_VALUE_LITERAL;
+        one_literal.type = expression->type;
+        one_literal.as.literal.kind = AST_LITERAL_INTEGER;
+        one_literal.as.literal.text = ast_copy_text("0");
+        one_literal.as.literal.bool_value = false;
+        if (!one_literal.as.literal.text) {
+            mir_lvalue_free(&lvalue);
+            mir_value_free(&current_value);
+            mir_set_error(context->build, expression->source_span, NULL,
+                          "Out of memory while lowering postfix expression.");
+            return false;
+        }
+        instruction.as.binary.right = one_literal;
+        if (!mir_current_block(context) ||
+            !append_instruction(mir_current_block(context), instruction)) {
+            mir_instruction_free(&instruction);
+            mir_lvalue_free(&lvalue);
+            mir_value_free(&current_value);
+            return false;
+        }
+
+        /* This temp holds the original value — it's the expression result. */
+        value->kind = MIR_VALUE_TEMP;
+        value->type = expression->type;
+        value->as.temp_index = instruction.as.binary.dest_temp;
+    }
+
+    /* Compute the incremented/decremented value: current +/- 1. */
+    {
+        MirValue new_value_literal;
+
+        memset(&instruction, 0, sizeof(instruction));
+        instruction.kind = MIR_INSTR_BINARY;
+        instruction.as.binary.dest_temp = context->unit->next_temp_index++;
+        instruction.as.binary.operator = is_increment
+            ? AST_BINARY_OP_ADD
+            : AST_BINARY_OP_SUBTRACT;
+        instruction.as.binary.left = current_value;
+
+        new_value_literal.kind = MIR_VALUE_LITERAL;
+        new_value_literal.type = expression->type;
+        new_value_literal.as.literal.kind = AST_LITERAL_INTEGER;
+        new_value_literal.as.literal.text = ast_copy_text("1");
+        new_value_literal.as.literal.bool_value = false;
+        if (!new_value_literal.as.literal.text) {
+            mir_lvalue_free(&lvalue);
+            mir_set_error(context->build, expression->source_span, NULL,
+                          "Out of memory while lowering postfix expression.");
+            return false;
+        }
+        instruction.as.binary.right = new_value_literal;
+        if (!mir_current_block(context) ||
+            !append_instruction(mir_current_block(context), instruction)) {
+            mir_instruction_free(&instruction);
+            mir_lvalue_free(&lvalue);
+            return false;
+        }
+
+        stored_value.kind = MIR_VALUE_TEMP;
+        stored_value.type = expression->type;
+        stored_value.as.temp_index = instruction.as.binary.dest_temp;
+    }
+
+    /* Store the new value back to the variable. */
+    if (!store_lvalue_value(context, &lvalue, stored_value,
+                            expression->source_span)) {
+        mir_lvalue_free(&lvalue);
+        return false;
+    }
+
+    mir_lvalue_free(&lvalue);
+    return true;
+}
+
 static bool lower_template_part_value(MirUnitBuildContext *context,
                                       const HirExpression *expression,
                                       MirValue *value) {
@@ -2051,6 +2307,57 @@ static bool lower_member_expression(MirUnitBuildContext *context,
                                     const HirExpression *expression,
                                     MirValue *value) {
     MirInstruction instruction;
+    const char *union_name = NULL;
+    const char *variant_name = NULL;
+
+    /* Non-payload union variant: Option.None → union_new with no payload */
+    if (!expression->is_callable &&
+        is_union_variant_member(expression, &union_name, &variant_name)) {
+        size_t variant_index = 0;
+        size_t variant_count = 0;
+
+        if (!find_hir_union_variant(context->build, union_name, variant_name,
+                                    &variant_index, &variant_count)) {
+            mir_set_error(context->build,
+                          expression->source_span,
+                          NULL,
+                          "Internal error: union variant '%s.%s' not found in HIR.",
+                          union_name, variant_name);
+            return false;
+        }
+
+        memset(&instruction, 0, sizeof(instruction));
+        instruction.kind = MIR_INSTR_UNION_NEW;
+        instruction.as.union_new.dest_temp = context->unit->next_temp_index++;
+        instruction.as.union_new.union_name = ast_copy_text(union_name);
+        instruction.as.union_new.variant_index = variant_index;
+        instruction.as.union_new.variant_count = variant_count;
+        instruction.as.union_new.has_payload = false;
+        memset(&instruction.as.union_new.payload, 0, sizeof(MirValue));
+
+        if (!instruction.as.union_new.union_name) {
+            mir_set_error(context->build,
+                          expression->source_span,
+                          NULL,
+                          "Out of memory while lowering MIR union variant.");
+            return false;
+        }
+
+        if (!mir_current_block(context) ||
+            !append_instruction(mir_current_block(context), instruction)) {
+            mir_instruction_free(&instruction);
+            mir_set_error(context->build,
+                          expression->source_span,
+                          NULL,
+                          "Out of memory while lowering MIR union variant.");
+            return false;
+        }
+
+        value->kind = MIR_VALUE_TEMP;
+        value->type = expression->type;
+        value->as.temp_index = instruction.as.union_new.dest_temp;
+        return true;
+    }
 
     memset(&instruction, 0, sizeof(instruction));
     instruction.kind = MIR_INSTR_MEMBER;
@@ -2117,30 +2424,70 @@ static bool lower_array_literal_expression(MirUnitBuildContext *context,
                                            MirValue *value) {
     MirInstruction instruction;
     size_t i;
+    bool is_hetero = (expression->type.kind == CHECKED_TYPE_NAMED &&
+                      expression->type.name != NULL &&
+                      strcmp(expression->type.name, "arr") == 0);
 
     memset(&instruction, 0, sizeof(instruction));
-    instruction.kind = MIR_INSTR_ARRAY_LITERAL;
-    instruction.as.array_literal.dest_temp = context->unit->next_temp_index++;
-    if (expression->as.array_literal.element_count > 0) {
-        instruction.as.array_literal.elements = calloc(expression->as.array_literal.element_count,
-                                                       sizeof(*instruction.as.array_literal.elements));
-        if (!instruction.as.array_literal.elements) {
-            mir_set_error(context->build,
-                          expression->source_span,
-                          NULL,
-                          "Out of memory while lowering MIR array literals.");
-            return false;
+
+    if (is_hetero) {
+        instruction.kind = MIR_INSTR_HETERO_ARRAY_NEW;
+        instruction.as.hetero_array_new.dest_temp = context->unit->next_temp_index++;
+        if (expression->as.array_literal.element_count > 0) {
+            instruction.as.hetero_array_new.elements = calloc(
+                expression->as.array_literal.element_count,
+                sizeof(*instruction.as.hetero_array_new.elements));
+            instruction.as.hetero_array_new.element_types = calloc(
+                expression->as.array_literal.element_count,
+                sizeof(*instruction.as.hetero_array_new.element_types));
+            if (!instruction.as.hetero_array_new.elements ||
+                !instruction.as.hetero_array_new.element_types) {
+                free(instruction.as.hetero_array_new.elements);
+                free(instruction.as.hetero_array_new.element_types);
+                mir_set_error(context->build,
+                              expression->source_span,
+                              NULL,
+                              "Out of memory while lowering MIR hetero array.");
+                return false;
+            }
+        }
+        instruction.as.hetero_array_new.element_count = expression->as.array_literal.element_count;
+        for (i = 0; i < expression->as.array_literal.element_count; i++) {
+            if (!lower_expression(context,
+                                  expression->as.array_literal.elements[i],
+                                  &instruction.as.hetero_array_new.elements[i])) {
+                mir_instruction_free(&instruction);
+                return false;
+            }
+            instruction.as.hetero_array_new.element_types[i] =
+                expression->as.array_literal.elements[i]->type;
+        }
+    } else {
+        instruction.kind = MIR_INSTR_ARRAY_LITERAL;
+        instruction.as.array_literal.dest_temp = context->unit->next_temp_index++;
+        if (expression->as.array_literal.element_count > 0) {
+            instruction.as.array_literal.elements = calloc(
+                expression->as.array_literal.element_count,
+                sizeof(*instruction.as.array_literal.elements));
+            if (!instruction.as.array_literal.elements) {
+                mir_set_error(context->build,
+                              expression->source_span,
+                              NULL,
+                              "Out of memory while lowering MIR array literals.");
+                return false;
+            }
+        }
+        instruction.as.array_literal.element_count = expression->as.array_literal.element_count;
+        for (i = 0; i < expression->as.array_literal.element_count; i++) {
+            if (!lower_expression(context,
+                                  expression->as.array_literal.elements[i],
+                                  &instruction.as.array_literal.elements[i])) {
+                mir_instruction_free(&instruction);
+                return false;
+            }
         }
     }
-    instruction.as.array_literal.element_count = expression->as.array_literal.element_count;
-    for (i = 0; i < expression->as.array_literal.element_count; i++) {
-        if (!lower_expression(context,
-                              expression->as.array_literal.elements[i],
-                              &instruction.as.array_literal.elements[i])) {
-            mir_instruction_free(&instruction);
-            return false;
-        }
-    }
+
     if (!mir_current_block(context) ||
         !append_instruction(mir_current_block(context), instruction)) {
         mir_instruction_free(&instruction);
@@ -2153,7 +2500,9 @@ static bool lower_array_literal_expression(MirUnitBuildContext *context,
 
     value->kind = MIR_VALUE_TEMP;
     value->type = expression->type;
-    value->as.temp_index = instruction.as.array_literal.dest_temp;
+    value->as.temp_index = is_hetero
+        ? instruction.as.hetero_array_new.dest_temp
+        : instruction.as.array_literal.dest_temp;
     return true;
 }
 
@@ -2278,6 +2627,69 @@ static bool lower_expression(MirUnitBuildContext *context,
         return true;
 
     case HIR_EXPR_CALL:
+        /* Payload union variant constructor: Option.Some(42) → union_new */
+        {
+            const char *call_union_name = NULL;
+            const char *call_variant_name = NULL;
+
+            if (is_union_variant_call(expression, &call_union_name, &call_variant_name)) {
+                size_t call_variant_index = 0;
+                size_t call_variant_count = 0;
+
+                if (!find_hir_union_variant(context->build, call_union_name, call_variant_name,
+                                            &call_variant_index, &call_variant_count)) {
+                    mir_set_error(context->build,
+                                  expression->source_span,
+                                  NULL,
+                                  "Internal error: union variant '%s.%s' not found in HIR.",
+                                  call_union_name, call_variant_name);
+                    return false;
+                }
+
+                memset(&instruction, 0, sizeof(instruction));
+                instruction.kind = MIR_INSTR_UNION_NEW;
+                instruction.as.union_new.dest_temp = context->unit->next_temp_index++;
+                instruction.as.union_new.union_name = ast_copy_text(call_union_name);
+                instruction.as.union_new.variant_index = call_variant_index;
+                instruction.as.union_new.variant_count = call_variant_count;
+                instruction.as.union_new.has_payload = (expression->as.call.argument_count > 0);
+
+                if (!instruction.as.union_new.union_name) {
+                    mir_set_error(context->build,
+                                  expression->source_span,
+                                  NULL,
+                                  "Out of memory while lowering MIR union variant call.");
+                    return false;
+                }
+
+                if (instruction.as.union_new.has_payload) {
+                    if (!lower_expression(context,
+                                          expression->as.call.arguments[0],
+                                          &instruction.as.union_new.payload)) {
+                        mir_instruction_free(&instruction);
+                        return false;
+                    }
+                } else {
+                    memset(&instruction.as.union_new.payload, 0, sizeof(MirValue));
+                }
+
+                if (!mir_current_block(context) ||
+                    !append_instruction(mir_current_block(context), instruction)) {
+                    mir_instruction_free(&instruction);
+                    mir_set_error(context->build,
+                                  expression->source_span,
+                                  NULL,
+                                  "Out of memory while lowering MIR union variant call.");
+                    return false;
+                }
+
+                value->kind = MIR_VALUE_TEMP;
+                value->type = expression->type;
+                value->as.temp_index = instruction.as.union_new.dest_temp;
+                return true;
+            }
+        }
+
         memset(&instruction, 0, sizeof(instruction));
         instruction.kind = MIR_INSTR_CALL;
         if (!lower_expression(context, expression->as.call.callee, &instruction.as.call.callee)) {
@@ -2375,6 +2787,17 @@ static bool lower_expression(MirUnitBuildContext *context,
         return lower_member_expression(context, expression, value);
     case HIR_EXPR_ARRAY_LITERAL:
         return lower_array_literal_expression(context, expression, value);
+    case HIR_EXPR_DISCARD:
+        value->kind = MIR_VALUE_LITERAL;
+        value->type = expression->type;
+        value->as.literal.kind = AST_LITERAL_NULL;
+        value->as.literal.text = NULL;
+        value->as.literal.bool_value = false;
+        return true;
+    case HIR_EXPR_POST_INCREMENT:
+        return lower_postfix_increment_expression(context, expression, value, true);
+    case HIR_EXPR_POST_DECREMENT:
+        return lower_postfix_increment_expression(context, expression, value, false);
     }
 
     return false;
@@ -2881,7 +3304,7 @@ static bool lower_start_unit(MirBuildContext *context,
     memset(&unit_context, 0, sizeof(unit_context));
     unit.kind = MIR_UNIT_START;
     unit.name = ast_copy_text("start");
-    unit.return_type = (CheckedType){CHECKED_TYPE_VALUE, AST_PRIMITIVE_INT32, 0};
+    unit.return_type = (CheckedType){CHECKED_TYPE_VALUE, AST_PRIMITIVE_INT32, 0, NULL, 0};
     if (!unit.name) {
         mir_set_error(context,
                       start_decl->source_span,
@@ -2954,6 +3377,11 @@ bool mir_build_program(MirProgram *program, const HirProgram *hir_program) {
 
         if (decl->kind == HIR_TOP_LEVEL_START) {
             start_decl = &decl->as.start;
+            continue;
+        }
+
+        /* Union declarations are type-only metadata; no MIR code emitted. */
+        if (decl->kind == HIR_TOP_LEVEL_UNION) {
             continue;
         }
 

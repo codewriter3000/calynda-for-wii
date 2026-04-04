@@ -288,6 +288,130 @@ static void test_hir_builder_rejects_programs_with_type_errors(void) {
     parser_free(&parser);
 }
 
+/* ------------------------------------------------------------------ */
+/* V2: post ++/-- , discard, varargs in HIR dump                       */
+/* ------------------------------------------------------------------ */
+
+static void test_hir_dump_lowers_v2_expressions(void) {
+    static const char source[] =
+        "int32 counter = () -> 0;\n"
+        "int32 inc = (int32... nums) -> 0;\n"
+        "start(string[] args) -> {\n"
+        "    var c = counter();\n"
+        "    c++;\n"
+        "    c--;\n"
+        "    _ = inc(1, 2, 3);\n"
+        "    return 0;\n"
+        "};\n";
+    Parser parser;
+    AstProgram program;
+    SymbolTable symbols;
+    TypeChecker checker;
+    HirProgram hir;
+    char *dump;
+
+    symbol_table_init(&symbols);
+    type_checker_init(&checker);
+    hir_program_init(&hir);
+    parser_init(&parser, source);
+    REQUIRE_TRUE(parser_parse_program(&parser, &program), "parse V2 HIR source");
+    REQUIRE_TRUE(symbol_table_build(&symbols, &program), "build symbols V2 HIR");
+    REQUIRE_TRUE(type_checker_check_program(&checker, &program, &symbols),
+                 "type check V2 HIR source");
+    REQUIRE_TRUE(hir_build_program(&hir, &program, &symbols, &checker),
+                 "build HIR for V2 expressions");
+
+    dump = hir_dump_program_to_string(&hir);
+    REQUIRE_TRUE(dump != NULL, "HIR dump string is not NULL");
+
+    ASSERT_CONTAINS("PostIncrement", dump, "HIR dump contains PostIncrement");
+    ASSERT_CONTAINS("PostDecrement", dump, "HIR dump contains PostDecrement");
+    ASSERT_CONTAINS("Discard", dump, "HIR dump contains Discard");
+    ASSERT_CONTAINS("varargs", dump, "HIR dump contains varargs");
+
+    free(dump);
+    hir_program_free(&hir);
+    type_checker_free(&checker);
+    symbol_table_free(&symbols);
+    ast_program_free(&program);
+    parser_free(&parser);
+}
+
+static void test_hir_dump_shows_export_and_static_flags(void) {
+    static const char source[] =
+        "export int32 visible = () -> 1;\n"
+        "static int32 counter = () -> 0;\n"
+        "start(string[] args) -> 0;\n";
+    Parser parser;
+    AstProgram program;
+    SymbolTable symbols;
+    TypeChecker checker;
+    HirProgram hir;
+    char *dump;
+
+    symbol_table_init(&symbols);
+    type_checker_init(&checker);
+    hir_program_init(&hir);
+    parser_init(&parser, source);
+    REQUIRE_TRUE(parser_parse_program(&parser, &program), "parse export/static HIR source");
+    REQUIRE_TRUE(symbol_table_build(&symbols, &program), "build symbols export/static HIR");
+    REQUIRE_TRUE(type_checker_check_program(&checker, &program, &symbols),
+                 "type check export/static HIR source");
+    REQUIRE_TRUE(hir_build_program(&hir, &program, &symbols, &checker),
+                 "build HIR for export/static");
+
+    dump = hir_dump_program_to_string(&hir);
+    REQUIRE_TRUE(dump != NULL, "HIR dump string is not NULL");
+
+    ASSERT_CONTAINS("exported", dump, "HIR dump contains exported flag");
+    ASSERT_CONTAINS("static", dump, "HIR dump contains static flag");
+
+    free(dump);
+    hir_program_free(&hir);
+    type_checker_free(&checker);
+    symbol_table_free(&symbols);
+    ast_program_free(&program);
+    parser_free(&parser);
+}
+
+static void test_hir_dump_lowers_union_declarations(void) {
+    const char *source =
+        "union Option<T> { Some(T), None };\n"
+        "start(string[] args) -> 0;\n";
+    Parser parser;
+    AstProgram program;
+    SymbolTable symbols;
+    TypeChecker checker;
+    HirProgram hir;
+    char *dump;
+
+    symbol_table_init(&symbols);
+    type_checker_init(&checker);
+    hir_program_init(&hir);
+    parser_init(&parser, source);
+    REQUIRE_TRUE(parser_parse_program(&parser, &program), "parse union HIR source");
+    REQUIRE_TRUE(symbol_table_build(&symbols, &program), "build symbols union HIR");
+    REQUIRE_TRUE(type_checker_check_program(&checker, &program, &symbols),
+                 "type check union HIR source");
+    REQUIRE_TRUE(hir_build_program(&hir, &program, &symbols, &checker),
+                 "build HIR for union declarations");
+
+    dump = hir_dump_program_to_string(&hir);
+    REQUIRE_TRUE(dump != NULL, "union HIR dump string is not NULL");
+
+    ASSERT_CONTAINS("Union", dump, "HIR dump contains Union declaration");
+    ASSERT_CONTAINS("Option", dump, "HIR dump contains Option name");
+    ASSERT_CONTAINS("Some", dump, "HIR dump contains Some variant");
+    ASSERT_CONTAINS("None", dump, "HIR dump contains None variant");
+
+    free(dump);
+    hir_program_free(&hir);
+    type_checker_free(&checker);
+    symbol_table_free(&symbols);
+    ast_program_free(&program);
+    parser_free(&parser);
+}
+
 int main(void) {
     printf("Running HIR dump tests...\n\n");
 
@@ -295,6 +419,9 @@ int main(void) {
     RUN_TEST(test_hir_dump_normalizes_exit_and_keeps_external_callable_metadata);
     RUN_TEST(test_hir_dump_covers_templates_casts_arrays_assignments_and_nested_lambdas);
     RUN_TEST(test_hir_builder_rejects_programs_with_type_errors);
+    RUN_TEST(test_hir_dump_lowers_v2_expressions);
+    RUN_TEST(test_hir_dump_shows_export_and_static_flags);
+    RUN_TEST(test_hir_dump_lowers_union_declarations);
 
     printf("\n========================================\n");
     printf("  Total: %d  |  Passed: %d  |  Failed: %d\n",

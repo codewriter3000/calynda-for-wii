@@ -36,6 +36,8 @@ struct MachineUnit {
     LirUnitKind   kind;
     char         *name;
     CheckedType   return_type;
+    bool          is_exported;
+    bool          is_static;
     size_t        parameter_count;
     MachineFrameSlot *frame_slots;
     size_t        frame_slot_count;

@@ -398,8 +398,40 @@ static bool dump_type(AstDumpBuilder *builder, const AstType *type, bool is_infe
         if (!builder_append(builder, "void")) {
             return false;
         }
+    } else if (type->kind == AST_TYPE_NAMED) {
+        if (!builder_append(builder, type->name ? type->name : "?")) {
+            return false;
+        }
+    } else if (type->kind == AST_TYPE_ARR) {
+        if (!builder_append(builder, "arr")) {
+            return false;
+        }
     } else {
         if (!builder_append(builder, primitive_type_name(type->primitive))) {
+            return false;
+        }
+    }
+
+    if (type->generic_args.count > 0) {
+        size_t g;
+        if (!builder_append_char(builder, '<')) {
+            return false;
+        }
+        for (g = 0; g < type->generic_args.count; g++) {
+            if (g > 0 && !builder_append(builder, ", ")) {
+                return false;
+            }
+            if (type->generic_args.items[g].kind == AST_GENERIC_ARG_WILDCARD) {
+                if (!builder_append_char(builder, '?')) {
+                    return false;
+                }
+            } else if (type->generic_args.items[g].type) {
+                if (!dump_type(builder, type->generic_args.items[g].type, false)) {
+                    return false;
+                }
+            }
+        }
+        if (!builder_append_char(builder, '>')) {
             return false;
         }
     }
@@ -777,6 +809,8 @@ static bool dump_statement(AstDumpBuilder *builder, const AstStatement *statemen
                               statement->as.local_binding.is_final
                                   ? " final=true"
                                   : " final=false") &&
+               (!statement->as.local_binding.is_internal ||
+                builder_append(builder, " internal=true")) &&
                builder_finish_line(builder) &&
                dump_expression_label(builder, indent + 1, "Initializer",
                                      statement->as.local_binding.initializer);
@@ -882,12 +916,32 @@ static bool dump_top_level_decl(AstDumpBuilder *builder, const AstTopLevelDecl *
         return dump_expression_label(builder, indent + 1, "Initializer",
                                      decl->as.binding_decl.initializer);
 
-    case AST_TOP_LEVEL_UNION:
-        return builder_start_line(builder, indent) &&
-               builder_append(builder, "UnionDecl name=") &&
-               builder_append(builder,
-                              decl->as.union_decl.name ? decl->as.union_decl.name : "<null>") &&
-               builder_finish_line(builder);
+    case AST_TOP_LEVEL_UNION: {
+        size_t m;
+
+        if (!builder_start_line(builder, indent) ||
+            !builder_append(builder, "UnionDecl name=") ||
+            !builder_append(builder,
+                            decl->as.union_decl.name ? decl->as.union_decl.name : "<null>")) {
+            return false;
+        }
+        for (m = 0; m < decl->as.union_decl.modifier_count; m++) {
+            const char *mod_name = NULL;
+            switch (decl->as.union_decl.modifiers[m]) {
+            case AST_MODIFIER_PUBLIC:   mod_name = "public";   break;
+            case AST_MODIFIER_PRIVATE:  mod_name = "private";  break;
+            case AST_MODIFIER_EXPORT:   mod_name = "export";   break;
+            case AST_MODIFIER_FINAL:    mod_name = "final";    break;
+            case AST_MODIFIER_STATIC:   mod_name = "static";   break;
+            case AST_MODIFIER_INTERNAL: mod_name = "internal"; break;
+            }
+            if (mod_name && (!builder_append(builder, " ") ||
+                             !builder_append(builder, mod_name))) {
+                return false;
+            }
+        }
+        return builder_finish_line(builder);
+    }
     }
 
     return false;

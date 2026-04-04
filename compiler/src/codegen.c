@@ -207,6 +207,16 @@ const char *codegen_runtime_helper_name(CodegenRuntimeHelper helper) {
         return "__calynda_rt_throw";
     case CODEGEN_RUNTIME_CAST_VALUE:
         return "__calynda_rt_cast_value";
+    case CODEGEN_RUNTIME_UNION_NEW:
+        return "__calynda_rt_union_new";
+    case CODEGEN_RUNTIME_UNION_GET_TAG:
+        return "__calynda_rt_union_get_tag";
+    case CODEGEN_RUNTIME_UNION_GET_PAYLOAD:
+        return "__calynda_rt_union_get_payload";
+    case CODEGEN_RUNTIME_HETERO_ARRAY_NEW:
+        return "__calynda_rt_hetero_array_new";
+    case CODEGEN_RUNTIME_HETERO_ARRAY_GET_TAG:
+        return "__calynda_rt_hetero_array_get_tag";
     }
 
     return "__calynda_rt_unknown";
@@ -466,6 +476,24 @@ static void infer_vreg_types(const LirUnit *lir_unit,
                                             type_count,
                                             instruction->as.store_member.value);
                 break;
+
+            case LIR_INSTR_HETERO_ARRAY_NEW:
+                for (size_t element_index = 0;
+                     element_index < instruction->as.hetero_array_new.element_count;
+                     element_index++) {
+                    propagate_operand_vreg_type(types,
+                                                type_count,
+                                                instruction->as.hetero_array_new.elements[element_index]);
+                }
+                break;
+
+            case LIR_INSTR_UNION_NEW:
+                if (instruction->as.union_new.has_payload) {
+                    propagate_operand_vreg_type(types,
+                                                type_count,
+                                                instruction->as.union_new.payload);
+                }
+                break;
             }
         }
 
@@ -597,6 +625,16 @@ static bool select_instruction(CodegenBuildContext *context,
     case LIR_INSTR_STORE_MEMBER:
         selected->selection.kind = CODEGEN_SELECTION_RUNTIME;
         selected->selection.as.runtime_helper = CODEGEN_RUNTIME_STORE_MEMBER;
+        return true;
+
+    case LIR_INSTR_HETERO_ARRAY_NEW:
+        selected->selection.kind = CODEGEN_SELECTION_RUNTIME;
+        selected->selection.as.runtime_helper = CODEGEN_RUNTIME_HETERO_ARRAY_NEW;
+        return true;
+
+    case LIR_INSTR_UNION_NEW:
+        selected->selection.kind = CODEGEN_SELECTION_RUNTIME;
+        selected->selection.as.runtime_helper = CODEGEN_RUNTIME_UNION_NEW;
         return true;
     }
 

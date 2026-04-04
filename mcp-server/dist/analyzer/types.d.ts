@@ -1,5 +1,5 @@
 import { PRIMITIVE_TYPES } from '../knowledge/keywords';
-export type CalyndaType = PrimitiveCalyndaType | ArrayCalyndaType | VoidCalyndaType | UnknownType | LambdaCalyndaType;
+export type CalyndaType = PrimitiveCalyndaType | ArrayCalyndaType | NamedCalyndaType | VoidCalyndaType | UnknownType | LambdaCalyndaType;
 export interface PrimitiveCalyndaType {
     kind: 'primitive';
     name: typeof PRIMITIVE_TYPES[number];
@@ -7,6 +7,11 @@ export interface PrimitiveCalyndaType {
 export interface ArrayCalyndaType {
     kind: 'array';
     elementType: CalyndaType;
+}
+export interface NamedCalyndaType {
+    kind: 'named';
+    name: string;
+    genericArgs: CalyndaType[];
 }
 export interface VoidCalyndaType {
     kind: 'void';

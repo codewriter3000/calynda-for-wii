@@ -273,6 +273,10 @@ static const char *instruction_kind_name(LirInstructionKind kind) {
         return "store-index";
     case LIR_INSTR_STORE_MEMBER:
         return "store-member";
+    case LIR_INSTR_HETERO_ARRAY_NEW:
+        return "hetero-array-new";
+    case LIR_INSTR_UNION_NEW:
+        return "union-new";
     }
 
     return "unknown";

@@ -9,13 +9,16 @@
 typedef enum {
     RESOLVED_TYPE_INVALID = 0,
     RESOLVED_TYPE_VOID,
-    RESOLVED_TYPE_VALUE
+    RESOLVED_TYPE_VALUE,
+    RESOLVED_TYPE_NAMED
 } ResolvedTypeKind;
 
 typedef struct {
     ResolvedTypeKind kind;
     AstPrimitiveType primitive;
     size_t           array_depth;
+    const char      *name;             /* for RESOLVED_TYPE_NAMED */
+    size_t           generic_arg_count; /* for RESOLVED_TYPE_NAMED */
 } ResolvedType;
 
 typedef struct {

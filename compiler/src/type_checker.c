@@ -30,6 +30,9 @@ static CheckedType checked_type_void(void);
 static CheckedType checked_type_null(void);
 static CheckedType checked_type_external(void);
 static CheckedType checked_type_value(AstPrimitiveType primitive, size_t array_depth);
+static CheckedType checked_type_named(const char *name, size_t generic_arg_count,
+                                      size_t array_depth);
+static CheckedType checked_type_type_param(const char *name);
 static bool checked_type_equals(CheckedType left, CheckedType right);
 static bool checked_type_is_scalar_value(CheckedType type);
 static bool checked_type_is_bool(CheckedType type);
@@ -92,6 +95,11 @@ static const TypeCheckInfo *check_lambda_expression(TypeChecker *checker,
                                                     const CheckedType *expected_return_type,
                                                     const AstSourceSpan *related_span);
 static bool check_start_decl(TypeChecker *checker, const AstStartDecl *start_decl);
+static bool validate_binding_modifiers(TypeChecker *checker,
+                                       const AstBindingDecl *binding);
+static bool validate_internal_access(TypeChecker *checker,
+                                     const AstExpression *identifier,
+                                     const Symbol *symbol);
 static bool check_block(TypeChecker *checker, const AstBlock *block,
                         const BlockContext *context,
                         CheckedType *return_type, AstSourceSpan *return_span);
@@ -108,6 +116,8 @@ static bool expression_is_assignment_target(TypeChecker *checker,
                                             const Symbol **root_symbol);
 static const TypeCheckInfo *check_expression(TypeChecker *checker,
                                              const AstExpression *expression);
+static const TypeCheckInfo *check_hetero_array_literal(TypeChecker *checker,
+                                                       const AstExpression *expression);
 
 void type_checker_init(TypeChecker *checker) {
     if (!checker) {
@@ -212,6 +222,25 @@ bool type_checker_check_program(TypeChecker *checker,
                                           NULL,
                                           "Internal error: missing symbol for '%s'.",
                                           decl->as.binding_decl.name);
+                return false;
+            }
+
+            if (!validate_binding_modifiers(checker, &decl->as.binding_decl)) {
+                return false;
+            }
+
+            if (!resolve_symbol_info(checker, symbol)) {
+                return false;
+            }
+        } else if (decl->kind == AST_TOP_LEVEL_UNION) {
+            const Symbol *symbol = scope_lookup_local(root_scope, decl->as.union_decl.name);
+
+            if (!symbol) {
+                type_checker_set_error_at(checker,
+                                          decl->as.union_decl.name_span,
+                                          NULL,
+                                          "Internal error: missing symbol for union '%s'.",
+                                          decl->as.union_decl.name);
                 return false;
             }
 
@@ -333,6 +362,29 @@ bool checked_type_to_string(CheckedType type, char *buffer, size_t buffer_size) 
             }
         }
         return true;
+
+    case CHECKED_TYPE_NAMED:
+        written = snprintf(buffer, buffer_size, "%s", type.name ? type.name : "?");
+        if (written < 0 || (size_t)written >= buffer_size) {
+            return false;
+        }
+        if (type.generic_arg_count > 0) {
+            written += snprintf(buffer + written, buffer_size - (size_t)written,
+                                "<...%zu>", type.generic_arg_count);
+            if (written < 0 || (size_t)written >= buffer_size) {
+                return false;
+            }
+        }
+        for (i = 0; i < type.array_depth; i++) {
+            written += snprintf(buffer + written, buffer_size - (size_t)written, "[]");
+            if (written < 0 || (size_t)written >= buffer_size) {
+                return false;
+            }
+        }
+        return true;
+
+    case CHECKED_TYPE_TYPE_PARAM:
+        return snprintf(buffer, buffer_size, "%s", type.name ? type.name : "?") >= 0;
     }
 
     return false;
@@ -534,9 +586,46 @@ static CheckedType checked_type_value(AstPrimitiveType primitive, size_t array_d
     return type;
 }
 
+static CheckedType checked_type_named(const char *name, size_t generic_arg_count,
+                                      size_t array_depth) {
+    CheckedType type = checked_type_invalid();
+    type.kind = CHECKED_TYPE_NAMED;
+    type.name = name;
+    type.generic_arg_count = generic_arg_count;
+    type.array_depth = array_depth;
+    return type;
+}
+
+static CheckedType checked_type_type_param(const char *name) {
+    CheckedType type = checked_type_invalid();
+    type.kind = CHECKED_TYPE_TYPE_PARAM;
+    type.name = name;
+    return type;
+}
+
+static bool checked_type_is_hetero_array(CheckedType type) {
+    return type.kind == CHECKED_TYPE_NAMED &&
+           type.name != NULL &&
+           strcmp(type.name, "arr") == 0 &&
+           type.generic_arg_count >= 1 &&
+           type.array_depth == 0;
+}
+
 static bool checked_type_equals(CheckedType left, CheckedType right) {
-    return left.kind == right.kind &&
-           left.primitive == right.primitive &&
+    if (left.kind != right.kind) {
+        return false;
+    }
+
+    if (left.kind == CHECKED_TYPE_NAMED || left.kind == CHECKED_TYPE_TYPE_PARAM) {
+        if (!left.name || !right.name) {
+            return left.name == right.name;
+        }
+        return strcmp(left.name, right.name) == 0 &&
+               left.generic_arg_count == right.generic_arg_count &&
+               left.array_depth == right.array_depth;
+    }
+
+    return left.primitive == right.primitive &&
            left.array_depth == right.array_depth;
 }
 
@@ -738,6 +827,8 @@ static CheckedType checked_type_from_resolved_type(ResolvedType type) {
         return checked_type_void();
     case RESOLVED_TYPE_VALUE:
         return checked_type_value(type.primitive, type.array_depth);
+    case RESOLVED_TYPE_NAMED:
+        return checked_type_named(type.name, type.generic_arg_count, type.array_depth);
     }
 
     return checked_type_invalid();
@@ -815,6 +906,16 @@ static bool checked_type_assignable(CheckedType target, CheckedType source) {
 
         if (target.array_depth == 0 &&
             checked_type_is_numeric(target) && checked_type_is_numeric(source)) {
+            return true;
+        }
+    }
+
+    /* arr<?> accepts any single-dimension array or another arr<?> */
+    if (checked_type_is_hetero_array(target)) {
+        if (source.kind == CHECKED_TYPE_VALUE && source.array_depth == 1) {
+            return true;
+        }
+        if (checked_type_is_hetero_array(source)) {
             return true;
         }
     }
@@ -1131,12 +1232,60 @@ static const TypeCheckInfo *resolve_symbol_info(TypeChecker *checker,
             return NULL;
         }
         break;
+
+    case SYMBOL_KIND_UNION:
+        resolved_info = type_check_info_make(
+            checked_type_named(symbol->name, symbol->generic_param_count, 0));
+        break;
+
+    case SYMBOL_KIND_TYPE_PARAMETER:
+        resolved_info = type_check_info_make(checked_type_type_param(symbol->name));
+        break;
     }
 
     entry->info = resolved_info;
     entry->is_resolving = false;
     entry->is_resolved = true;
     return &entry->info;
+}
+
+static const TypeCheckInfo *check_hetero_array_literal(TypeChecker *checker,
+                                                       const AstExpression *expression) {
+    TypeCheckInfo info;
+    size_t i;
+
+    if (expression->as.array_literal.elements.count == 0) {
+        type_checker_set_error_at(checker,
+                                  expression->source_span,
+                                  NULL,
+                                  "Cannot create an empty heterogeneous array literal.");
+        return NULL;
+    }
+
+    for (i = 0; i < expression->as.array_literal.elements.count; i++) {
+        const TypeCheckInfo *element_info = check_expression(
+            checker, expression->as.array_literal.elements.items[i]);
+        CheckedType element_type;
+
+        if (!element_info) {
+            return NULL;
+        }
+
+        element_type = type_check_source_type(element_info);
+        if (element_type.kind == CHECKED_TYPE_VOID ||
+            element_type.kind == CHECKED_TYPE_NULL) {
+            type_checker_set_error_at(checker,
+                                      expression->as.array_literal.elements.items[i]->source_span,
+                                      NULL,
+                                      "Heterogeneous array elements cannot have type %s.",
+                                      element_type.kind == CHECKED_TYPE_VOID
+                                          ? "void" : "null");
+            return NULL;
+        }
+    }
+
+    info = type_check_info_make(checked_type_named("arr", 1, 0));
+    return store_expression_info(checker, expression, info);
 }
 
 static bool resolve_binding_symbol(TypeChecker *checker,
@@ -1186,6 +1335,9 @@ static bool resolve_binding_symbol(TypeChecker *checker,
                                                    initializer,
                                                    &target_type,
                                                    &symbol->declaration_span);
+    } else if (checked_type_is_hetero_array(target_type) &&
+               initializer && initializer->kind == AST_EXPR_ARRAY_LITERAL) {
+        initializer_info = check_hetero_array_literal(checker, initializer);
     } else {
         initializer_info = check_expression(checker, initializer);
     }
@@ -1422,6 +1574,72 @@ static bool check_start_decl(TypeChecker *checker, const AstStartDecl *start_dec
                                   &start_decl->start_span,
                                   "start body must produce int32 but got %s.",
                                   body_text);
+        return false;
+    }
+
+    return true;
+}
+
+static bool validate_binding_modifiers(TypeChecker *checker,
+                                       const AstBindingDecl *binding) {
+    bool has_export = ast_decl_has_modifier(binding->modifiers,
+                                            binding->modifier_count,
+                                            AST_MODIFIER_EXPORT);
+    bool has_private = ast_decl_has_modifier(binding->modifiers,
+                                             binding->modifier_count,
+                                             AST_MODIFIER_PRIVATE);
+    bool has_public = ast_decl_has_modifier(binding->modifiers,
+                                            binding->modifier_count,
+                                            AST_MODIFIER_PUBLIC);
+
+    if (has_export && has_private) {
+        type_checker_set_error_at(checker, binding->name_span, NULL,
+                                  "Binding '%s' cannot be both export and private.",
+                                  binding->name);
+        return false;
+    }
+
+    if (has_public && has_private) {
+        type_checker_set_error_at(checker, binding->name_span, NULL,
+                                  "Binding '%s' cannot be both public and private.",
+                                  binding->name);
+        return false;
+    }
+
+    return true;
+}
+
+static bool validate_internal_access(TypeChecker *checker,
+                                     const AstExpression *identifier,
+                                     const Symbol *symbol) {
+    const SymbolResolution *resolution;
+    const Scope *walk;
+    bool crossed_lambda = false;
+
+    if (!symbol->is_internal) {
+        return true;
+    }
+
+    resolution = symbol_table_find_resolution(checker->symbols, identifier);
+    if (!resolution || !resolution->scope) {
+        return true;
+    }
+
+    walk = resolution->scope;
+    while (walk && walk != symbol->scope) {
+        if (walk->kind == SCOPE_KIND_LAMBDA) {
+            crossed_lambda = true;
+            break;
+        }
+        walk = walk->parent;
+    }
+
+    if (!crossed_lambda) {
+        type_checker_set_error_at(checker,
+                                  identifier->source_span,
+                                  &symbol->declaration_span,
+                                  "Internal binding '%s' can only be called from a nested lambda.",
+                                  symbol->name);
         return false;
     }
 
@@ -1869,6 +2087,9 @@ static bool expression_is_assignment_target(TypeChecker *checker,
                                                expression->as.grouping.inner,
                                                root_symbol);
 
+    case AST_EXPR_DISCARD:
+        return true;
+
     default:
         return false;
     }
@@ -1963,6 +2184,10 @@ static const TypeCheckInfo *check_expression(TypeChecker *checker,
                 return NULL;
             }
 
+            if (!validate_internal_access(checker, expression, symbol)) {
+                return NULL;
+            }
+
             cached_info = resolve_symbol_info(checker, symbol);
             if (!cached_info) {
                 return NULL;
@@ -2017,6 +2242,12 @@ static const TypeCheckInfo *check_expression(TypeChecker *checker,
                                           "Cannot assign to final symbol '%s'.",
                                           target_symbol->name ? target_symbol->name : "<anonymous>");
                 return NULL;
+            }
+
+            /* Discard target accepts any value without type checking. */
+            if (expression->as.assignment.target->kind == AST_EXPR_DISCARD) {
+                info = *value_info;
+                break;
             }
 
             source_type = type_check_source_type(value_info);
@@ -2225,16 +2456,27 @@ static const TypeCheckInfo *check_expression(TypeChecker *checker,
                 return NULL;
             }
 
-            if (callee_info->parameters &&
-                callee_info->parameters->count != expression->as.call.arguments.count) {
-                type_checker_set_error_at(checker,
-                                          expression->source_span,
-                                          NULL,
-                                          "Call expects %zu argument%s but got %zu.",
-                                          callee_info->parameters->count,
-                                          callee_info->parameters->count == 1 ? "" : "s",
-                                          expression->as.call.arguments.count);
-                return NULL;
+            if (callee_info->parameters) {
+                bool has_varargs = callee_info->parameters->count > 0 &&
+                    callee_info->parameters->items[callee_info->parameters->count - 1].is_varargs;
+                size_t required_count = has_varargs
+                    ? callee_info->parameters->count - 1
+                    : callee_info->parameters->count;
+
+                if (has_varargs
+                        ? expression->as.call.arguments.count < required_count
+                        : expression->as.call.arguments.count != required_count) {
+                    type_checker_set_error_at(checker,
+                                              expression->source_span,
+                                              NULL,
+                                              has_varargs
+                                                  ? "Call expects at least %zu argument%s but got %zu."
+                                                  : "Call expects %zu argument%s but got %zu.",
+                                              required_count,
+                                              required_count == 1 ? "" : "s",
+                                              expression->as.call.arguments.count);
+                    return NULL;
+                }
             }
 
             for (i = 0; i < expression->as.call.arguments.count; i++) {
@@ -2246,8 +2488,11 @@ static const TypeCheckInfo *check_expression(TypeChecker *checker,
                 }
 
                 if (callee_info->parameters) {
+                    size_t param_index = (i < callee_info->parameters->count)
+                        ? i
+                        : callee_info->parameters->count - 1;
                     CheckedType parameter_type = checked_type_from_ast_type(checker,
-                        &callee_info->parameters->items[i].type);
+                        &callee_info->parameters->items[param_index].type);
                     CheckedType argument_type = type_check_source_type(argument_info);
 
                     if (checker->has_error) {
@@ -2266,7 +2511,7 @@ static const TypeCheckInfo *check_expression(TypeChecker *checker,
                                                sizeof(actual_text));
                         type_checker_set_error_at(checker,
                                                   expression->as.call.arguments.items[i]->source_span,
-                                                  &callee_info->parameters->items[i].name_span,
+                                                  &callee_info->parameters->items[param_index].name_span,
                                                   "Argument %zu to call expects %s but got %s.",
                                                   i + 1,
                                                   expected_text,
@@ -2348,6 +2593,38 @@ static const TypeCheckInfo *check_expression(TypeChecker *checker,
             if (target_type.kind == CHECKED_TYPE_EXTERNAL) {
                 info = type_check_info_make_external_callable();
                 break;
+            }
+
+            /* Union member access: Option.Some */
+            if (target_type.kind == CHECKED_TYPE_NAMED &&
+                expression->as.member.target->kind == AST_EXPR_IDENTIFIER) {
+                const Symbol *union_sym = symbol_table_resolve_identifier(
+                    checker->symbols, expression->as.member.target);
+                if (union_sym && union_sym->kind == SYMBOL_KIND_UNION) {
+                    const Scope *union_scope = symbol_table_find_scope(
+                        checker->symbols, union_sym->declaration, SCOPE_KIND_UNION);
+                    if (union_scope) {
+                        const Symbol *variant_sym = scope_lookup_local(
+                            union_scope, expression->as.member.member);
+                        if (variant_sym && variant_sym->kind == SYMBOL_KIND_VARIANT) {
+                            if (variant_sym->variant_has_payload) {
+                                info = type_check_info_make(target_type);
+                                info.is_callable = true;
+                                info.callable_return_type = target_type;
+                            } else {
+                                info = type_check_info_make(target_type);
+                            }
+                            break;
+                        }
+                    }
+                    type_checker_set_error_at(checker,
+                                              expression->source_span,
+                                              NULL,
+                                              "Union '%s' has no variant named '%s'.",
+                                              union_sym->name ? union_sym->name : "?",
+                                              expression->as.member.member ? expression->as.member.member : "?");
+                    return NULL;
+                }
             }
 
             checked_type_to_string(target_type, target_text, sizeof(target_text));
@@ -2484,7 +2761,19 @@ static const TypeCheckInfo *check_expression(TypeChecker *checker,
                 ? expression->as.post_increment.operand
                 : expression->as.post_decrement.operand;
             const TypeCheckInfo *operand_info = check_expression(checker, operand);
+            CheckedType operand_type;
             if (!operand_info) {
+                return NULL;
+            }
+            operand_type = type_check_source_type(operand_info);
+            if (!checked_type_is_numeric(operand_type)) {
+                char operand_text[64];
+                checked_type_to_string(operand_type, operand_text, sizeof(operand_text));
+                type_checker_set_error_at(checker,
+                                          expression->source_span,
+                                          NULL,
+                                          "Postfix operator requires a numeric operand but got %s.",
+                                          operand_text);
                 return NULL;
             }
             info = *operand_info;

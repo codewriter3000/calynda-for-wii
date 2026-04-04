@@ -20,7 +20,7 @@ const PRIMITIVE_TYPES = new Set([
   'bool', 'char', 'string',
 ]);
 
-const MODIFIERS = new Set(['public', 'private', 'final']);
+const MODIFIERS = new Set(['public', 'private', 'final', 'export', 'static', 'internal']);
 
 const ASSIGNMENT_OPS = new Set(['=', '+=', '-=', '*=', '/=', '%=', '&=', '|=', '^=', '<<=', '>>=']);
 
@@ -138,6 +138,15 @@ class Parser {
       return this.parseBindingDecl(modifiers);
     }
 
+    if (this.check('keyword', 'union')) {
+      return this.parseUnionDecl(modifiers);
+    }
+
+    /* An identifier in type position could be a named type used as a binding type annotation */
+    if (this.check('identifier')) {
+      return this.parseBindingDecl(modifiers);
+    }
+
     const tok = this.peek();
     throw new ParseError(`Unexpected token '${tok.value}'`, tok.line, tok.column);
   }
@@ -172,6 +181,49 @@ class Parser {
     return { kind: 'BindingDecl', modifiers, typeAnnotation, name, value, start: startPos, end: this.position() };
   }
 
+  private parseUnionDecl(modifiers: string[]): AST.UnionDecl {
+    const startPos = this.position();
+    this.eat('keyword', 'union');
+    const name = this.eat('identifier').value;
+
+    const genericParams: string[] = [];
+    if (this.check('lt')) {
+      this.advance();
+      genericParams.push(this.eat('identifier').value);
+      while (this.check('comma')) {
+        this.advance();
+        genericParams.push(this.eat('identifier').value);
+      }
+      this.eat('gt');
+    }
+
+    this.eat('lbrace');
+    const variants: AST.UnionVariant[] = [];
+    if (!this.check('rbrace')) {
+      variants.push(this.parseUnionVariant());
+      while (this.check('comma')) {
+        this.advance();
+        if (this.check('rbrace')) break;
+        variants.push(this.parseUnionVariant());
+      }
+    }
+    this.eat('rbrace');
+    this.eat('semicolon');
+
+    return { kind: 'UnionDecl', modifiers, name, genericParams, variants, start: startPos, end: this.position() };
+  }
+
+  private parseUnionVariant(): AST.UnionVariant {
+    const name = this.eat('identifier').value;
+    let payloadType: AST.TypeNode | undefined;
+    if (this.check('lparen')) {
+      this.advance();
+      payloadType = this.parseType();
+      this.eat('rparen');
+    }
+    return { name, payloadType };
+  }
+
   private parseType(): AST.TypeNode {
     const startPos = this.position();
 
@@ -182,8 +234,23 @@ class Parser {
       return voidNode;
     }
 
-    const typeTok = this.eat('type');
-    let typeNode: AST.TypeNode = { kind: 'PrimitiveType', name: typeTok.value, start: this.tokenToPosition(typeTok), end: this.position() };
+    if (this.check('keyword', 'arr')) {
+      this.advance();
+      const genericArgs = this.parseGenericArgs();
+      const namedNode: AST.NamedTypeNode = { kind: 'NamedType', name: 'arr', genericArgs, start: startPos, end: this.position() };
+      return namedNode;
+    }
+
+    let typeNode: AST.TypeNode;
+
+    if (this.check('identifier')) {
+      const nameTok = this.advance();
+      const genericArgs = this.check('lt') ? this.parseGenericArgs() : [];
+      typeNode = { kind: 'NamedType', name: nameTok.value, genericArgs, start: this.tokenToPosition(nameTok), end: this.position() };
+    } else {
+      const typeTok = this.eat('type');
+      typeNode = { kind: 'PrimitiveType', name: typeTok.value, start: this.tokenToPosition(typeTok), end: this.position() };
+    }
 
     while (this.check('lbracket')) {
       const arrStart = this.position();
@@ -197,6 +264,27 @@ class Parser {
     }
 
     return typeNode;
+  }
+
+  private parseGenericArg(): AST.TypeNode {
+    if (this.check('question')) {
+      const pos = this.position();
+      this.advance();
+      return { kind: 'NamedType', name: '?', genericArgs: [], start: pos, end: this.position() };
+    }
+    return this.parseType();
+  }
+
+  private parseGenericArgs(): AST.TypeNode[] {
+    const args: AST.TypeNode[] = [];
+    this.eat('lt');
+    args.push(this.parseGenericArg());
+    while (this.check('comma')) {
+      this.advance();
+      args.push(this.parseGenericArg());
+    }
+    this.eat('gt');
+    return args;
   }
 
   private parseParameterList(): AST.Parameter[] {

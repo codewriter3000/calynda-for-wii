@@ -12,6 +12,8 @@ static const char *primitive_type_name(AstPrimitiveType primitive);
 static ResolvedType resolved_type_invalid(void);
 static ResolvedType resolved_type_void(void);
 static ResolvedType resolved_type_value(AstPrimitiveType primitive, size_t array_depth);
+static ResolvedType resolved_type_named(const char *name, size_t generic_arg_count,
+                                        size_t array_depth);
 static bool source_span_is_valid(AstSourceSpan span);
 static void type_resolver_set_error(TypeResolver *resolver, const char *format, ...);
 static void type_resolver_set_error_at(TypeResolver *resolver,
@@ -84,6 +86,21 @@ bool type_resolver_resolve_program(TypeResolver *resolver, const AstProgram *pro
             if (!resolve_binding_decl(resolver, &decl->as.binding_decl) ||
                 !resolve_expression(resolver, decl->as.binding_decl.initializer)) {
                 return false;
+            }
+        } else if (decl->kind == AST_TOP_LEVEL_UNION) {
+            const AstUnionDecl *union_decl = &decl->as.union_decl;
+            size_t v;
+            for (v = 0; v < union_decl->variant_count; v++) {
+                if (union_decl->variants[v].payload_type) {
+                    if (!resolve_declared_type(resolver,
+                                               union_decl->variants[v].payload_type,
+                                               union_decl->name_span,
+                                               "Union variant",
+                                               union_decl->variants[v].name,
+                                               false)) {
+                        return false;
+                    }
+                }
             }
         } else if (!resolve_start_decl(resolver, &decl->as.start_decl)) {
             return false;
@@ -195,6 +212,26 @@ bool resolved_type_to_string(ResolvedType type, char *buffer, size_t buffer_size
             }
         }
         return true;
+
+    case RESOLVED_TYPE_NAMED:
+        written = snprintf(buffer, buffer_size, "%s", type.name ? type.name : "?");
+        if (written < 0 || (size_t)written >= buffer_size) {
+            return false;
+        }
+        if (type.generic_arg_count > 0) {
+            written += snprintf(buffer + written, buffer_size - (size_t)written,
+                                "<...%zu>", type.generic_arg_count);
+            if (written < 0 || (size_t)written >= buffer_size) {
+                return false;
+            }
+        }
+        for (i = 0; i < type.array_depth; i++) {
+            written += snprintf(buffer + written, buffer_size - (size_t)written, "[]");
+            if (written < 0 || (size_t)written >= buffer_size) {
+                return false;
+            }
+        }
+        return true;
     }
 
     return false;
@@ -293,6 +330,16 @@ static ResolvedType resolved_type_value(AstPrimitiveType primitive, size_t array
     ResolvedType type = resolved_type_invalid();
     type.kind = RESOLVED_TYPE_VALUE;
     type.primitive = primitive;
+    type.array_depth = array_depth;
+    return type;
+}
+
+static ResolvedType resolved_type_named(const char *name, size_t generic_arg_count,
+                                        size_t array_depth) {
+    ResolvedType type = resolved_type_invalid();
+    type.kind = RESOLVED_TYPE_NAMED;
+    type.name = name;
+    type.generic_arg_count = generic_arg_count;
     type.array_depth = array_depth;
     return type;
 }
@@ -466,6 +513,14 @@ static bool resolve_declared_type(TypeResolver *resolver,
         }
 
         resolved_type = resolved_type_void();
+    } else if (type->kind == AST_TYPE_NAMED) {
+        resolved_type = resolved_type_named(type->name,
+                                            type->generic_args.count,
+                                            type->dimension_count);
+    } else if (type->kind == AST_TYPE_ARR) {
+        resolved_type = resolved_type_named("arr",
+                                            type->generic_args.count,
+                                            0);
     } else {
         resolved_type = resolved_type_value(type->primitive, type->dimension_count);
     }

@@ -76,7 +76,9 @@ typedef enum {
     MIR_INSTR_STORE_LOCAL,
     MIR_INSTR_STORE_GLOBAL,
     MIR_INSTR_STORE_INDEX,
-    MIR_INSTR_STORE_MEMBER
+    MIR_INSTR_STORE_MEMBER,
+    MIR_INSTR_HETERO_ARRAY_NEW,
+    MIR_INSTR_UNION_NEW
 } MirInstructionKind;
 
 struct MirInstruction {
@@ -149,6 +151,20 @@ struct MirInstruction {
             char    *member;
             MirValue value;
         } store_member;
+        struct {
+            size_t       dest_temp;
+            MirValue    *elements;
+            CheckedType *element_types;
+            size_t       element_count;
+        } hetero_array_new;
+        struct {
+            size_t   dest_temp;
+            char    *union_name;
+            size_t   variant_index;
+            size_t   variant_count;
+            bool     has_payload;
+            MirValue payload;
+        } union_new;
     } as;
 };
 

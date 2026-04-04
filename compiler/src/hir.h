@@ -33,6 +33,7 @@ typedef struct {
     char         *name;
     const Symbol *symbol;
     CheckedType   type;
+    bool          is_varargs;
     AstSourceSpan source_span;
 } HirParameter;
 
@@ -127,6 +128,14 @@ typedef struct {
     HirBlock        *body;
 } HirLambdaExpression;
 
+typedef struct {
+    HirExpression *operand;
+} HirPostIncrementExpression;
+
+typedef struct {
+    HirExpression *operand;
+} HirPostDecrementExpression;
+
 typedef enum {
     HIR_EXPR_LITERAL = 0,
     HIR_EXPR_TEMPLATE,
@@ -140,7 +149,10 @@ typedef enum {
     HIR_EXPR_INDEX,
     HIR_EXPR_MEMBER,
     HIR_EXPR_CAST,
-    HIR_EXPR_ARRAY_LITERAL
+    HIR_EXPR_ARRAY_LITERAL,
+    HIR_EXPR_DISCARD,
+    HIR_EXPR_POST_INCREMENT,
+    HIR_EXPR_POST_DECREMENT
 } HirExpressionKind;
 
 struct HirExpression {
@@ -163,6 +175,8 @@ struct HirExpression {
         HirMemberExpression       member;
         HirCastExpression         cast;
         HirArrayLiteralExpression array_literal;
+        HirPostIncrementExpression  post_increment;
+        HirPostDecrementExpression  post_decrement;
     } as;
 };
 
@@ -207,6 +221,9 @@ typedef struct {
     const Symbol *symbol;
     CheckedType   type;
     bool          is_final;
+    bool          is_exported;
+    bool          is_static;
+    bool          is_internal;
     bool          is_callable;
     HirCallableSignature callable_signature;
     AstSourceSpan source_span;
@@ -219,9 +236,28 @@ typedef struct {
     AstSourceSpan    source_span;
 } HirStartDecl;
 
+typedef struct {
+    char         *name;
+    CheckedType   payload_type;
+    bool          has_payload;
+} HirUnionVariant;
+
+typedef struct {
+    char             *name;
+    const Symbol     *symbol;
+    AstSourceSpan     source_span;
+    char            **generic_params;
+    size_t            generic_param_count;
+    HirUnionVariant  *variants;
+    size_t            variant_count;
+    bool              is_exported;
+    bool              is_static;
+} HirUnionDecl;
+
 typedef enum {
     HIR_TOP_LEVEL_BINDING = 0,
-    HIR_TOP_LEVEL_START
+    HIR_TOP_LEVEL_START,
+    HIR_TOP_LEVEL_UNION
 } HirTopLevelDeclKind;
 
 struct HirTopLevelDecl {
@@ -229,6 +265,7 @@ struct HirTopLevelDecl {
     union {
         HirBindingDecl binding;
         HirStartDecl   start;
+        HirUnionDecl   union_decl;
     } as;
 };
 

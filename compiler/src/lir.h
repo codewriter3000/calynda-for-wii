@@ -79,7 +79,9 @@ typedef enum {
     LIR_INSTR_STORE_SLOT,
     LIR_INSTR_STORE_GLOBAL,
     LIR_INSTR_STORE_INDEX,
-    LIR_INSTR_STORE_MEMBER
+    LIR_INSTR_STORE_MEMBER,
+    LIR_INSTR_HETERO_ARRAY_NEW,
+    LIR_INSTR_UNION_NEW
 } LirInstructionKind;
 
 struct LirInstruction {
@@ -163,6 +165,20 @@ struct LirInstruction {
             char      *member;
             LirOperand value;
         } store_member;
+        struct {
+            size_t      dest_vreg;
+            LirOperand *elements;
+            CheckedType *element_types;
+            size_t      element_count;
+        } hetero_array_new;
+        struct {
+            size_t     dest_vreg;
+            char      *union_name;
+            size_t     variant_index;
+            size_t     variant_count;
+            bool       has_payload;
+            LirOperand payload;
+        } union_new;
     } as;
 };
 

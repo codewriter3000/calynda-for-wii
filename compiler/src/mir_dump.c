@@ -223,6 +223,35 @@ bool mir_dump_program(FILE *out, const MirProgram *program) {
                         return false;
                     }
                     break;
+                case MIR_INSTR_HETERO_ARRAY_NEW:
+                    fprintf(out, "t%zu = hetero_array_new [",
+                            instruction->as.hetero_array_new.dest_temp);
+                    for (size_t elem_index = 0;
+                         elem_index < instruction->as.hetero_array_new.element_count;
+                         elem_index++) {
+                        if (elem_index > 0 && fputs(", ", out) == EOF) {
+                            return false;
+                        }
+                        if (!dump_value(out, unit,
+                                        instruction->as.hetero_array_new.elements[elem_index])) {
+                            return false;
+                        }
+                    }
+                    fputc(']', out);
+                    break;
+                case MIR_INSTR_UNION_NEW:
+                    fprintf(out, "t%zu = union_new %s variant %zu",
+                            instruction->as.union_new.dest_temp,
+                            instruction->as.union_new.union_name ?
+                                instruction->as.union_new.union_name : "?",
+                            instruction->as.union_new.variant_index);
+                    if (instruction->as.union_new.has_payload) {
+                        fputs(" payload ", out);
+                        if (!dump_value(out, unit, instruction->as.union_new.payload)) {
+                            return false;
+                        }
+                    }
+                    break;
                 }
                 fputc('\n', out);
             }

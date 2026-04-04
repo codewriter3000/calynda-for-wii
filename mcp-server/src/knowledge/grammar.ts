@@ -102,12 +102,13 @@ UnionVariant
 (* 3. TYPES                                                         *)
 (* ================================================================ *)
 
-(* Note: GenericArgs are syntactically optional on any PrimitiveType *)
-(* but semantic analysis rejects meaningless combinations such as   *)
-(* int32<T>. In practice, generics apply to user-defined container  *)
-(* types (resolved via Identifier) and the built-in arr<T> form.    *)
+(* Note: GenericArgs are syntactically optional on any type, but    *)
+(* semantic analysis rejects meaningless combinations such as       *)
+(* int32<T>. In practice, generics apply to user-defined types      *)
+(* (resolved via Identifier) and the built-in arr<T> form.          *)
 Type
     = PrimitiveType [ GenericArgs ] { ArrayDimension }
+    | Identifier [ GenericArgs ] { ArrayDimension }            (* named / user-defined type *)
     | "arr" GenericArgs                                        (* heterogeneous array *)
     | "void"
     ;
@@ -162,9 +163,10 @@ Statement
     ;
 
 (* Local variable declaration — same syntax as top-level binding    *)
-(* but without visibility modifiers (only final allowed locally).   *)
+(* but without visibility modifiers.  "final" and "internal" are   *)
+(* allowed; "internal" restricts the local to nested-lambda use.   *)
 LocalBindingStatement
-    = [ "final" ] ( Type | "var" ) Identifier "=" Expression ";"
+    = [ "internal" ] [ "final" ] ( Type | "var" ) Identifier "=" Expression ";"
     ;
 
 ReturnStatement

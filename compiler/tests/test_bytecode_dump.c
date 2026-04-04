@@ -138,11 +138,30 @@ static void test_bytecode_dump_records_throw_literals(void) {
     free(dump);
 }
 
+static void test_bytecode_dump_lowers_union_new_instructions(void) {
+    static const char source[] =
+        "union Option<T> { Some(T), None };\n"
+        "Option<int32> x = Option.Some(42);\n"
+        "Option<int32> y = Option.None;\n"
+        "start(string[] args) -> 0;\n";
+    char *dump;
+
+    REQUIRE_TRUE(build_bytecode_from_source(source, &dump), "build union bytecode dump text");
+    ASSERT_CONTAINS("BC_UNION_NEW t0 <- type_desc(0) tag=0 payload=", dump,
+                    "payload variant lowers to BC_UNION_NEW with tag 0");
+    ASSERT_CONTAINS("BC_UNION_NEW t1 <- type_desc(0) tag=1 payload=", dump,
+                    "non-payload variant lowers to BC_UNION_NEW with tag 1");
+    ASSERT_CONTAINS("BC_STORE_GLOBAL", dump,
+                    "union values stored to globals via BC_STORE_GLOBAL");
+    free(dump);
+}
+
 int main(void) {
     printf("Running bytecode dump tests...\n\n");
 
     RUN_TEST(test_bytecode_dump_lowers_init_start_and_lambda_units);
     RUN_TEST(test_bytecode_dump_records_throw_literals);
+    RUN_TEST(test_bytecode_dump_lowers_union_new_instructions);
 
     printf("\n========================================\n");
     printf("  Total: %d  |  Passed: %d  |  Failed: %d\n",

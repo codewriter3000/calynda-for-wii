@@ -93,6 +93,9 @@ static void test_runtime_layout_dump_defines_object_model(void) {
         "  ExternCallable size=24 payload=[kind:uint32, name:char*]\n"
         "  TemplatePart size=16 payload=[tag:uint64, payload:uint64]\n"
         "  TemplateTags text=0 value=1\n"
+        "  Union size=32 payload=[type_desc:TypeDescriptor*, tag:uint32, payload:uint64]\n"
+        "  HeteroArray size=32 payload=[count:size_t, elements:uint64*, element_tags:uint32*]\n"
+        "  TypeDescriptor fields=[name:char*, generic_param_count:size_t, variant_count:size_t, variant_names:char**, variant_payload_tags:uint32*]\n"
         "  Builtins package=stdlib member=print\n";
     char *dump = calynda_rt_dump_layout_to_string();
 

@@ -783,6 +783,491 @@ static void test_type_checker_rejects_incompatible_compound_assignment(void) {
     parser_free(&parser);
 }
 
+/* ------------------------------------------------------------------ */
+/* V2: postfix ++/-- numeric validation                                */
+/* ------------------------------------------------------------------ */
+
+static void test_type_checker_rejects_postfix_increment_on_non_numeric(void) {
+    const char *source =
+        "string s = () -> \"hi\";\n"
+        "start(string[] args) -> {\n"
+        "    s++;\n"
+        "    return 0;\n"
+        "};\n";
+    Parser parser;
+    AstProgram program;
+    SymbolTable symbols;
+    TypeChecker checker;
+    const TypeCheckError *error;
+    char diagnostic_buffer[256];
+    char *diagnostic = diagnostic_buffer;
+
+    symbol_table_init(&symbols);
+    type_checker_init(&checker);
+    parser_init(&parser, source);
+    REQUIRE_TRUE(parser_parse_program(&parser, &program), "parse postfix inc non-numeric");
+    REQUIRE_TRUE(symbol_table_build(&symbols, &program), "build symbols postfix inc");
+    ASSERT_TRUE(!type_checker_check_program(&checker, &program, &symbols),
+                "postfix ++ on string fails type checking");
+
+    error = type_checker_get_error(&checker);
+    REQUIRE_TRUE(error != NULL, "postfix inc error exists");
+    REQUIRE_TRUE(type_checker_format_error(error, diagnostic, sizeof(diagnostic_buffer)),
+                 "format postfix inc error");
+    ASSERT_CONTAINS("Postfix operator requires a numeric operand",
+                    diagnostic,
+                    "postfix inc diagnostic mentions numeric operand");
+
+    type_checker_free(&checker);
+    symbol_table_free(&symbols);
+    ast_program_free(&program);
+    parser_free(&parser);
+}
+
+/* ------------------------------------------------------------------ */
+/* V2: discard _ as assignment target                                  */
+/* ------------------------------------------------------------------ */
+
+static void test_type_checker_allows_discard_assignment(void) {
+    const char *source =
+        "int32 compute = () -> 42;\n"
+        "start(string[] args) -> {\n"
+        "    _ = compute();\n"
+        "    return 0;\n"
+        "};\n";
+    Parser parser;
+    AstProgram program;
+    SymbolTable symbols;
+    TypeChecker checker;
+
+    symbol_table_init(&symbols);
+    type_checker_init(&checker);
+    parser_init(&parser, source);
+    REQUIRE_TRUE(parser_parse_program(&parser, &program), "parse discard assignment");
+    REQUIRE_TRUE(symbol_table_build(&symbols, &program), "build symbols discard");
+    ASSERT_TRUE(type_checker_check_program(&checker, &program, &symbols),
+                "discard assignment passes type checking");
+
+    type_checker_free(&checker);
+    symbol_table_free(&symbols);
+    ast_program_free(&program);
+    parser_free(&parser);
+}
+
+/* ------------------------------------------------------------------ */
+/* V2: varargs call argument count validation                          */
+/* ------------------------------------------------------------------ */
+
+static void test_type_checker_allows_varargs_call(void) {
+    const char *source =
+        "int32 sum = (int32... nums) -> 0;\n"
+        "start(string[] args) -> {\n"
+        "    sum(1, 2, 3);\n"
+        "    return 0;\n"
+        "};\n";
+    Parser parser;
+    AstProgram program;
+    SymbolTable symbols;
+    TypeChecker checker;
+
+    symbol_table_init(&symbols);
+    type_checker_init(&checker);
+    parser_init(&parser, source);
+    REQUIRE_TRUE(parser_parse_program(&parser, &program), "parse varargs call");
+    REQUIRE_TRUE(symbol_table_build(&symbols, &program), "build symbols varargs");
+    ASSERT_TRUE(type_checker_check_program(&checker, &program, &symbols),
+                "varargs call with multiple args passes type checking");
+
+    type_checker_free(&checker);
+    symbol_table_free(&symbols);
+    ast_program_free(&program);
+    parser_free(&parser);
+}
+
+static void test_type_checker_rejects_varargs_type_mismatch(void) {
+    const char *source =
+        "int32 sum = (int32... nums) -> 0;\n"
+        "start(string[] args) -> {\n"
+        "    sum(1, \"bad\", 3);\n"
+        "    return 0;\n"
+        "};\n";
+    Parser parser;
+    AstProgram program;
+    SymbolTable symbols;
+    TypeChecker checker;
+    const TypeCheckError *error;
+    char diagnostic_buffer[256];
+    char *diagnostic = diagnostic_buffer;
+
+    symbol_table_init(&symbols);
+    type_checker_init(&checker);
+    parser_init(&parser, source);
+    REQUIRE_TRUE(parser_parse_program(&parser, &program), "parse varargs type mismatch");
+    REQUIRE_TRUE(symbol_table_build(&symbols, &program), "build symbols varargs mismatch");
+    ASSERT_TRUE(!type_checker_check_program(&checker, &program, &symbols),
+                "varargs call with wrong type fails");
+
+    error = type_checker_get_error(&checker);
+    REQUIRE_TRUE(error != NULL, "varargs type mismatch error exists");
+    REQUIRE_TRUE(type_checker_format_error(error, diagnostic, sizeof(diagnostic_buffer)),
+                 "format varargs mismatch error");
+    ASSERT_CONTAINS("expects int32 but got string",
+                    diagnostic,
+                    "varargs mismatch diagnostic mentions type");
+
+    type_checker_free(&checker);
+    symbol_table_free(&symbols);
+    ast_program_free(&program);
+    parser_free(&parser);
+}
+
+/* ------------------------------------------------------------------ */
+/* V2: Java-style primitive aliases type check                         */
+/* ------------------------------------------------------------------ */
+
+static void test_type_checker_handles_java_primitive_aliases(void) {
+    const char *source =
+        "int x = () -> 42;\n"
+        "double pi = () -> 3.14;\n"
+        "start(string[] args) -> {\n"
+        "    var result = x() + int(pi());\n"
+        "    return result;\n"
+        "};\n";
+    Parser parser;
+    AstProgram program;
+    SymbolTable symbols;
+    TypeChecker checker;
+
+    symbol_table_init(&symbols);
+    type_checker_init(&checker);
+    parser_init(&parser, source);
+    REQUIRE_TRUE(parser_parse_program(&parser, &program), "parse java alias program");
+    REQUIRE_TRUE(symbol_table_build(&symbols, &program), "build symbols java alias");
+    ASSERT_TRUE(type_checker_check_program(&checker, &program, &symbols),
+                "java primitive aliases pass type checking");
+
+    type_checker_free(&checker);
+    symbol_table_free(&symbols);
+    ast_program_free(&program);
+    parser_free(&parser);
+}
+
+/* ------------------------------------------------------------------ */
+/* V2: modifier conflict diagnostics                                   */
+/* ------------------------------------------------------------------ */
+
+static void test_type_checker_rejects_export_private_conflict(void) {
+    const char *source =
+        "export private int32 x = () -> 42;\n"
+        "start(string[] args) -> 0;\n";
+    Parser parser;
+    AstProgram program;
+    SymbolTable symbols;
+    TypeChecker checker;
+    const TypeCheckError *error;
+    char diagnostic_buffer[256];
+    char *diagnostic = diagnostic_buffer;
+
+    symbol_table_init(&symbols);
+    type_checker_init(&checker);
+    parser_init(&parser, source);
+    REQUIRE_TRUE(parser_parse_program(&parser, &program), "parse export private");
+    REQUIRE_TRUE(symbol_table_build(&symbols, &program), "build symbols export private");
+    ASSERT_TRUE(!type_checker_check_program(&checker, &program, &symbols),
+                "export + private fails type checking");
+
+    error = type_checker_get_error(&checker);
+    REQUIRE_TRUE(error != NULL, "export private conflict error exists");
+    REQUIRE_TRUE(type_checker_format_error(error, diagnostic, sizeof(diagnostic_buffer)),
+                 "format export private error");
+    ASSERT_CONTAINS("cannot be both export and private",
+                    diagnostic,
+                    "export private diagnostic");
+
+    type_checker_free(&checker);
+    symbol_table_free(&symbols);
+    ast_program_free(&program);
+    parser_free(&parser);
+}
+
+static void test_type_checker_allows_export_binding(void) {
+    const char *source =
+        "export int32 x = () -> 42;\n"
+        "start(string[] args) -> 0;\n";
+    Parser parser;
+    AstProgram program;
+    SymbolTable symbols;
+    TypeChecker checker;
+
+    symbol_table_init(&symbols);
+    type_checker_init(&checker);
+    parser_init(&parser, source);
+    REQUIRE_TRUE(parser_parse_program(&parser, &program), "parse export binding");
+    REQUIRE_TRUE(symbol_table_build(&symbols, &program), "build symbols export");
+    ASSERT_TRUE(type_checker_check_program(&checker, &program, &symbols),
+                "export binding passes type checking");
+
+    type_checker_free(&checker);
+    symbol_table_free(&symbols);
+    ast_program_free(&program);
+    parser_free(&parser);
+}
+
+static void test_type_checker_allows_static_binding(void) {
+    const char *source =
+        "static int32 counter = () -> 0;\n"
+        "start(string[] args) -> 0;\n";
+    Parser parser;
+    AstProgram program;
+    SymbolTable symbols;
+    TypeChecker checker;
+
+    symbol_table_init(&symbols);
+    type_checker_init(&checker);
+    parser_init(&parser, source);
+    REQUIRE_TRUE(parser_parse_program(&parser, &program), "parse static binding");
+    REQUIRE_TRUE(symbol_table_build(&symbols, &program), "build symbols static");
+    ASSERT_TRUE(type_checker_check_program(&checker, &program, &symbols),
+                "static binding passes type checking");
+
+    type_checker_free(&checker);
+    symbol_table_free(&symbols);
+    ast_program_free(&program);
+    parser_free(&parser);
+}
+
+static void test_type_checker_rejects_internal_same_scope(void) {
+    const char *source =
+        "start(string[] args) -> {\n"
+        "    internal int32 helper = () -> 1;\n"
+        "    int32 x = helper();\n"
+        "    return x;\n"
+        "};\n";
+    Parser parser;
+    AstProgram program;
+    SymbolTable symbols;
+    TypeChecker checker;
+    const TypeCheckError *error;
+
+    symbol_table_init(&symbols);
+    type_checker_init(&checker);
+    parser_init(&parser, source);
+    REQUIRE_TRUE(parser_parse_program(&parser, &program), "parse internal same scope");
+    REQUIRE_TRUE(symbol_table_build(&symbols, &program), "build symbols internal same");
+    ASSERT_TRUE(!type_checker_check_program(&checker, &program, &symbols),
+                "internal same scope rejected");
+
+    error = type_checker_get_error(&checker);
+    REQUIRE_TRUE(error != NULL, "internal same scope error exists");
+    ASSERT_CONTAINS("Internal binding", error->message,
+                    "error mentions internal binding");
+    ASSERT_CONTAINS("nested lambda", error->message,
+                    "error mentions nested lambda");
+
+    type_checker_free(&checker);
+    symbol_table_free(&symbols);
+    ast_program_free(&program);
+    parser_free(&parser);
+}
+
+static void test_type_checker_allows_internal_from_nested_lambda(void) {
+    const char *source =
+        "start(string[] args) -> {\n"
+        "    internal int32 helper = () -> 42;\n"
+        "    int32 cb = () -> helper();\n"
+        "    return 0;\n"
+        "};\n";
+    Parser parser;
+    AstProgram program;
+    SymbolTable symbols;
+    TypeChecker checker;
+
+    symbol_table_init(&symbols);
+    type_checker_init(&checker);
+    parser_init(&parser, source);
+    REQUIRE_TRUE(parser_parse_program(&parser, &program), "parse internal nested lambda");
+    REQUIRE_TRUE(symbol_table_build(&symbols, &program), "build symbols internal nested");
+    ASSERT_TRUE(type_checker_check_program(&checker, &program, &symbols),
+                "internal from nested lambda passes type checking");
+
+    type_checker_free(&checker);
+    symbol_table_free(&symbols);
+    ast_program_free(&program);
+    parser_free(&parser);
+}
+
+static void test_type_checker_resolves_union_symbol(void) {
+    const char *source =
+        "union Direction { North, South, East, West };\n"
+        "start(string[] args) -> 0;\n";
+    Parser parser;
+    AstProgram program;
+    SymbolTable symbols;
+    TypeChecker checker;
+    const Symbol *sym;
+    const TypeCheckInfo *info;
+
+    parser_init(&parser, source);
+    REQUIRE_TRUE(parser_parse_program(&parser, &program), "parse union program");
+
+    symbol_table_init(&symbols);
+    REQUIRE_TRUE(symbol_table_build(&symbols, &program), "build symbols");
+
+    type_checker_init(&checker);
+    ASSERT_TRUE(type_checker_check_program(&checker, &program, &symbols),
+                "union passes type checking");
+
+    sym = scope_lookup_local(symbol_table_root_scope(&symbols), "Direction");
+    REQUIRE_TRUE(sym != NULL, "Direction symbol exists");
+    info = type_checker_get_symbol_info(&checker, sym);
+    REQUIRE_TRUE(info != NULL, "Direction has type info");
+    ASSERT_EQ_INT(CHECKED_TYPE_NAMED, info->type.kind, "Direction type is named");
+
+    type_checker_free(&checker);
+    symbol_table_free(&symbols);
+    ast_program_free(&program);
+    parser_free(&parser);
+}
+
+static void test_type_checker_resolves_named_type_local(void) {
+    const char *source =
+        "union Direction { North, South, East, West };\n"
+        "start(string[] args) -> {\n"
+        "    Direction d = Direction;\n"
+        "    return 0;\n"
+        "};\n";
+    Parser parser;
+    AstProgram program;
+    SymbolTable symbols;
+    TypeChecker checker;
+
+    parser_init(&parser, source);
+    REQUIRE_TRUE(parser_parse_program(&parser, &program), "parse named local program");
+
+    symbol_table_init(&symbols);
+    REQUIRE_TRUE(symbol_table_build(&symbols, &program), "build symbols named local");
+
+    type_checker_init(&checker);
+    ASSERT_TRUE(type_checker_check_program(&checker, &program, &symbols),
+                "named type local passes type checking");
+
+    type_checker_free(&checker);
+    symbol_table_free(&symbols);
+    ast_program_free(&program);
+    parser_free(&parser);
+}
+
+static void test_type_checker_accepts_non_payload_variant(void) {
+    const char *source =
+        "union Direction { North, South, East, West };\n"
+        "start(string[] args) -> {\n"
+        "    Direction d = Direction.North;\n"
+        "    return 0;\n"
+        "};\n";
+    Parser parser;
+    AstProgram program;
+    SymbolTable symbols;
+    TypeChecker checker;
+
+    parser_init(&parser, source);
+    REQUIRE_TRUE(parser_parse_program(&parser, &program), "parse variant program");
+
+    symbol_table_init(&symbols);
+    REQUIRE_TRUE(symbol_table_build(&symbols, &program), "build symbols variant");
+
+    type_checker_init(&checker);
+    ASSERT_TRUE(type_checker_check_program(&checker, &program, &symbols),
+                "non-payload variant passes type checking");
+
+    type_checker_free(&checker);
+    symbol_table_free(&symbols);
+    ast_program_free(&program);
+    parser_free(&parser);
+}
+
+static void test_type_checker_accepts_payload_variant_constructor(void) {
+    const char *source =
+        "union Option<T> { Some(T), None };\n"
+        "start(string[] args) -> {\n"
+        "    Option<int32> x = Option.Some(42);\n"
+        "    return 0;\n"
+        "};\n";
+    Parser parser;
+    AstProgram program;
+    SymbolTable symbols;
+    TypeChecker checker;
+
+    parser_init(&parser, source);
+    REQUIRE_TRUE(parser_parse_program(&parser, &program), "parse payload variant");
+
+    symbol_table_init(&symbols);
+    REQUIRE_TRUE(symbol_table_build(&symbols, &program), "build symbols payload variant");
+
+    type_checker_init(&checker);
+    ASSERT_TRUE(type_checker_check_program(&checker, &program, &symbols),
+                "payload variant constructor passes type checking");
+
+    type_checker_free(&checker);
+    symbol_table_free(&symbols);
+    ast_program_free(&program);
+    parser_free(&parser);
+}
+
+static void test_type_checker_rejects_unknown_variant(void) {
+    const char *source =
+        "union Direction { North, South, East, West };\n"
+        "start(string[] args) -> {\n"
+        "    Direction d = Direction.Up;\n"
+        "    return 0;\n"
+        "};\n";
+    Parser parser;
+    AstProgram program;
+    SymbolTable symbols;
+    TypeChecker checker;
+
+    parser_init(&parser, source);
+    REQUIRE_TRUE(parser_parse_program(&parser, &program), "parse unknown variant");
+
+    symbol_table_init(&symbols);
+    REQUIRE_TRUE(symbol_table_build(&symbols, &program), "build symbols unknown variant");
+
+    type_checker_init(&checker);
+    ASSERT_TRUE(!type_checker_check_program(&checker, &program, &symbols),
+                "unknown variant fails type checking");
+
+    type_checker_free(&checker);
+    symbol_table_free(&symbols);
+    ast_program_free(&program);
+    parser_free(&parser);
+}
+
+static void test_type_checker_accepts_hetero_array(void) {
+    const char *source =
+        "start(string[] args) -> {\n"
+        "    arr<?> mixed = [1, true, \"hello\"];\n"
+        "    return 0;\n"
+        "};\n";
+    Parser parser;
+    AstProgram program;
+    SymbolTable symbols;
+    TypeChecker checker;
+
+    parser_init(&parser, source);
+    REQUIRE_TRUE(parser_parse_program(&parser, &program), "parse hetero array");
+
+    symbol_table_init(&symbols);
+    REQUIRE_TRUE(symbol_table_build(&symbols, &program), "build symbols hetero array");
+
+    type_checker_init(&checker);
+    ASSERT_TRUE(type_checker_check_program(&checker, &program, &symbols),
+                "hetero array passes type checking");
+
+    type_checker_free(&checker);
+    symbol_table_free(&symbols);
+    ast_program_free(&program);
+    parser_free(&parser);
+}
+
 int main(void) {
     printf("Running type checker tests...\n\n");
 
@@ -806,6 +1291,22 @@ int main(void) {
     RUN_TEST(test_type_checker_rejects_assignment_to_import_symbol);
     RUN_TEST(test_type_checker_rejects_assignment_to_final_index_target);
     RUN_TEST(test_type_checker_rejects_incompatible_compound_assignment);
+    RUN_TEST(test_type_checker_rejects_postfix_increment_on_non_numeric);
+    RUN_TEST(test_type_checker_allows_discard_assignment);
+    RUN_TEST(test_type_checker_allows_varargs_call);
+    RUN_TEST(test_type_checker_rejects_varargs_type_mismatch);
+    RUN_TEST(test_type_checker_handles_java_primitive_aliases);
+    RUN_TEST(test_type_checker_rejects_export_private_conflict);
+    RUN_TEST(test_type_checker_allows_export_binding);
+    RUN_TEST(test_type_checker_allows_static_binding);
+    RUN_TEST(test_type_checker_rejects_internal_same_scope);
+    RUN_TEST(test_type_checker_allows_internal_from_nested_lambda);
+    RUN_TEST(test_type_checker_resolves_union_symbol);
+    RUN_TEST(test_type_checker_resolves_named_type_local);
+    RUN_TEST(test_type_checker_accepts_non_payload_variant);
+    RUN_TEST(test_type_checker_accepts_payload_variant_constructor);
+    RUN_TEST(test_type_checker_rejects_unknown_variant);
+    RUN_TEST(test_type_checker_accepts_hetero_array);
 
     printf("\n========================================\n");
     printf("  Total: %d  |  Passed: %d  |  Failed: %d\n",

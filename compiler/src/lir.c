@@ -359,6 +359,19 @@ static void lir_instruction_free(LirInstruction *instruction) {
         free(instruction->as.store_member.member);
         lir_operand_free(&instruction->as.store_member.value);
         break;
+    case LIR_INSTR_HETERO_ARRAY_NEW:
+        for (i = 0; i < instruction->as.hetero_array_new.element_count; i++) {
+            lir_operand_free(&instruction->as.hetero_array_new.elements[i]);
+        }
+        free(instruction->as.hetero_array_new.elements);
+        free(instruction->as.hetero_array_new.element_types);
+        break;
+    case LIR_INSTR_UNION_NEW:
+        free(instruction->as.union_new.union_name);
+        if (instruction->as.union_new.has_payload) {
+            lir_operand_free(&instruction->as.union_new.payload);
+        }
+        break;
     }
 
     memset(instruction, 0, sizeof(*instruction));
@@ -960,6 +973,85 @@ static bool lower_mir_instruction(LirBuildContext *context,
                           (AstSourceSpan){0},
                           NULL,
                           "Out of memory while lowering LIR member stores.");
+            return false;
+        }
+        return true;
+
+    case MIR_INSTR_HETERO_ARRAY_NEW:
+        memset(&lowered, 0, sizeof(lowered));
+        lowered.kind = LIR_INSTR_HETERO_ARRAY_NEW;
+        lowered.as.hetero_array_new.dest_vreg = instruction->as.hetero_array_new.dest_temp;
+        lowered.as.hetero_array_new.element_count = instruction->as.hetero_array_new.element_count;
+        if (instruction->as.hetero_array_new.element_count > 0) {
+            lowered.as.hetero_array_new.elements = calloc(
+                instruction->as.hetero_array_new.element_count,
+                sizeof(*lowered.as.hetero_array_new.elements));
+            lowered.as.hetero_array_new.element_types = calloc(
+                instruction->as.hetero_array_new.element_count,
+                sizeof(*lowered.as.hetero_array_new.element_types));
+            if (!lowered.as.hetero_array_new.elements ||
+                !lowered.as.hetero_array_new.element_types) {
+                lir_instruction_free(&lowered);
+                lir_set_error(context,
+                              (AstSourceSpan){0},
+                              NULL,
+                              "Out of memory while lowering LIR hetero array.");
+                return false;
+            }
+            for (i = 0; i < instruction->as.hetero_array_new.element_count; i++) {
+                if (!lir_operand_from_mir_value(context,
+                                                unit,
+                                                instruction->as.hetero_array_new.elements[i],
+                                                &lowered.as.hetero_array_new.elements[i])) {
+                    lir_instruction_free(&lowered);
+                    return false;
+                }
+                lowered.as.hetero_array_new.element_types[i] =
+                    instruction->as.hetero_array_new.element_types[i];
+            }
+        }
+        if (!append_instruction(block, lowered)) {
+            lir_instruction_free(&lowered);
+            lir_set_error(context,
+                          (AstSourceSpan){0},
+                          NULL,
+                          "Out of memory while lowering LIR hetero array.");
+            return false;
+        }
+        return true;
+
+    case MIR_INSTR_UNION_NEW:
+        memset(&lowered, 0, sizeof(lowered));
+        lowered.kind = LIR_INSTR_UNION_NEW;
+        lowered.as.union_new.dest_vreg = instruction->as.union_new.dest_temp;
+        lowered.as.union_new.union_name = ast_copy_text(instruction->as.union_new.union_name);
+        lowered.as.union_new.variant_index = instruction->as.union_new.variant_index;
+        lowered.as.union_new.variant_count = instruction->as.union_new.variant_count;
+        lowered.as.union_new.has_payload = instruction->as.union_new.has_payload;
+        if (!lowered.as.union_new.union_name) {
+            lir_set_error(context,
+                          (AstSourceSpan){0},
+                          NULL,
+                          "Out of memory while lowering LIR union new.");
+            return false;
+        }
+        if (instruction->as.union_new.has_payload) {
+            if (!lir_operand_from_mir_value(context,
+                                            unit,
+                                            instruction->as.union_new.payload,
+                                            &lowered.as.union_new.payload)) {
+                lir_instruction_free(&lowered);
+                return false;
+            }
+        } else {
+            memset(&lowered.as.union_new.payload, 0, sizeof(LirOperand));
+        }
+        if (!append_instruction(block, lowered)) {
+            lir_instruction_free(&lowered);
+            lir_set_error(context,
+                          (AstSourceSpan){0},
+                          NULL,
+                          "Out of memory while lowering LIR union new.");
             return false;
         }
         return true;

@@ -84,6 +84,8 @@ static bool parser_add_template_expression(Parser *parser, AstLiteral *literal,
                                            AstExpression *expression);
 static bool parser_parse_qualified_name(Parser *parser, AstQualifiedName *name);
 static bool parser_parse_type(Parser *parser, AstType *type);
+static bool parser_parse_generic_args(Parser *parser, AstType *type);
+static bool parser_consume_gt(Parser *parser, const char *message);
 static bool parser_parse_parameter_list(Parser *parser, AstParameterList *list,
                                         bool allow_empty);
 static bool parser_parse_lambda_body(Parser *parser, AstLambdaBody *body);
@@ -95,6 +97,7 @@ static AstExpression *parser_parse_binary_level(Parser *parser,
                                                 size_t mapping_count);
 static bool is_primitive_type_token(TokenType type);
 static bool is_type_start_token(TokenType type);
+static bool scan_generic_args_pattern(const Parser *parser, size_t *index);
 static bool scan_type_pattern(const Parser *parser, size_t *index);
 static bool looks_like_lambda_expression(const Parser *parser);
 static bool looks_like_local_binding_statement(const Parser *parser);
@@ -463,6 +466,27 @@ static bool parser_consume(Parser *parser, TokenType type, const char *message) 
     return false;
 }
 
+static bool parser_consume_gt(Parser *parser, const char *message) {
+    if (parser->pending_gt) {
+        parser->pending_gt = false;
+        return true;
+    }
+
+    if (parser_check(parser, TOK_GT)) {
+        parser_advance(parser);
+        return true;
+    }
+
+    if (parser_check(parser, TOK_RSHIFT)) {
+        parser_advance(parser);
+        parser->pending_gt = true;
+        return true;
+    }
+
+    parser_set_error(parser, *parser_current_token(parser), "%s", message);
+    return false;
+}
+
 static AstSourceSpan parser_source_span(const Token *token) {
     AstSourceSpan span;
     size_t token_length = 0;
@@ -683,15 +707,48 @@ static bool parser_parse_type(Parser *parser, AstType *type) {
         return true;
     }
 
-    if (!is_primitive_type_token(parser_current_token(parser)->type)) {
+    if (parser_match(parser, TOK_ARR)) {
+        ast_type_init_arr(&parsed_type);
+        if (!parser_parse_generic_args(parser, &parsed_type)) {
+            ast_type_free(&parsed_type);
+            return false;
+        }
+        *type = parsed_type;
+        return true;
+    }
+
+    if (parser_check(parser, TOK_IDENTIFIER)) {
+        char *name = parser_copy_token_text(parser_current_token(parser));
+        if (!name) {
+            parser_set_oom_error(parser);
+            return false;
+        }
+        parser_advance(parser);
+        ast_type_init_named(&parsed_type, name);
+        free(name);
+        if (!parsed_type.name) {
+            parser_set_oom_error(parser);
+            return false;
+        }
+    } else if (is_primitive_type_token(parser_current_token(parser)->type)) {
+        ast_type_init_primitive(&parsed_type,
+                                primitive_type_from_token(
+                                    parser_current_token(parser)->type));
+        parser_advance(parser);
+    } else {
         parser_set_error(parser, *parser_current_token(parser), "Expected type.");
         return false;
     }
 
-    ast_type_init_primitive(&parsed_type,
-                            primitive_type_from_token(parser_current_token(parser)->type));
-    parser_advance(parser);
+    /* Optional generic arguments. */
+    if (parser_check(parser, TOK_LT)) {
+        if (!parser_parse_generic_args(parser, &parsed_type)) {
+            ast_type_free(&parsed_type);
+            return false;
+        }
+    }
 
+    /* Optional array dimensions. */
     while (parser_match(parser, TOK_LBRACKET)) {
         if (parser_match(parser, TOK_INT_LIT)) {
             char *size_literal = parser_copy_token_text(parser_previous_token(parser));
@@ -734,6 +791,48 @@ static bool parser_parse_type(Parser *parser, AstType *type) {
 
     *type = parsed_type;
     return true;
+}
+
+static bool parser_parse_generic_args(Parser *parser, AstType *type) {
+    if (!parser_consume(parser, TOK_LT, "Expected '<'.")) {
+        return false;
+    }
+
+    do {
+        AstGenericArg arg;
+
+        memset(&arg, 0, sizeof(arg));
+
+        if (parser_match(parser, TOK_QUESTION)) {
+            arg.kind = AST_GENERIC_ARG_WILDCARD;
+            arg.type = NULL;
+        } else {
+            arg.type = malloc(sizeof(AstType));
+            if (!arg.type) {
+                parser_set_oom_error(parser);
+                return false;
+            }
+
+            if (!parser_parse_type(parser, arg.type)) {
+                free(arg.type);
+                return false;
+            }
+
+            arg.kind = AST_GENERIC_ARG_TYPE;
+        }
+
+        if (!ast_type_add_generic_arg(type, &arg)) {
+            if (arg.type) {
+                ast_type_free(arg.type);
+                free(arg.type);
+            }
+            parser_set_oom_error(parser);
+            return false;
+        }
+    } while (parser_match(parser, TOK_COMMA));
+
+    return parser_consume_gt(parser,
+                             "Expected '>' to close generic arguments.");
 }
 
 static bool parser_parse_parameter_list(Parser *parser, AstParameterList *list,
@@ -832,10 +931,27 @@ static AstTopLevelDecl *parse_top_level_decl(Parser *parser) {
         return parse_start_decl(parser);
     }
 
+    /* Peek past any modifier tokens to decide binding vs union. */
     if (parser_check(parser, TOK_PUBLIC) || parser_check(parser, TOK_PRIVATE) ||
         parser_check(parser, TOK_FINAL) || parser_check(parser, TOK_EXPORT) ||
-        parser_check(parser, TOK_STATIC) || parser_check(parser, TOK_INTERNAL) ||
-        parser_check(parser, TOK_VAR) ||
+        parser_check(parser, TOK_STATIC) || parser_check(parser, TOK_INTERNAL)) {
+        size_t ahead = parser->current;
+        while (true) {
+            TokenType t = parser_token_at(parser, ahead)->type;
+            if (t == TOK_PUBLIC || t == TOK_PRIVATE || t == TOK_FINAL ||
+                t == TOK_EXPORT || t == TOK_STATIC || t == TOK_INTERNAL) {
+                ahead++;
+            } else {
+                break;
+            }
+        }
+        if (parser_token_at(parser, ahead)->type == TOK_UNION) {
+            return parse_union_decl(parser);
+        }
+        return parse_binding_decl(parser);
+    }
+
+    if (parser_check(parser, TOK_VAR) ||
         is_type_start_token(parser_current_token(parser)->type)) {
         return parse_binding_decl(parser);
     }
@@ -957,6 +1073,41 @@ static AstTopLevelDecl *parse_union_decl(Parser *parser) {
     if (!decl) {
         parser_set_oom_error(parser);
         return NULL;
+    }
+
+    /* Consume optional modifiers before 'union'. */
+    while (parser_check(parser, TOK_PUBLIC) || parser_check(parser, TOK_PRIVATE) ||
+           parser_check(parser, TOK_FINAL) || parser_check(parser, TOK_EXPORT) ||
+           parser_check(parser, TOK_STATIC) || parser_check(parser, TOK_INTERNAL)) {
+        AstModifier modifier;
+
+        switch (parser_current_token(parser)->type) {
+        case TOK_PUBLIC:
+            modifier = AST_MODIFIER_PUBLIC;
+            break;
+        case TOK_PRIVATE:
+            modifier = AST_MODIFIER_PRIVATE;
+            break;
+        case TOK_EXPORT:
+            modifier = AST_MODIFIER_EXPORT;
+            break;
+        case TOK_STATIC:
+            modifier = AST_MODIFIER_STATIC;
+            break;
+        case TOK_INTERNAL:
+            modifier = AST_MODIFIER_INTERNAL;
+            break;
+        default:
+            modifier = AST_MODIFIER_FINAL;
+            break;
+        }
+
+        parser_advance(parser);
+        if (!ast_union_decl_add_modifier(&decl->as.union_decl, modifier)) {
+            parser_set_oom_error(parser);
+            ast_top_level_decl_free(decl);
+            return NULL;
+        }
     }
 
     if (!parser_consume(parser, TOK_UNION, "Expected 'union'.")) {
@@ -1177,7 +1328,8 @@ static AstStatement *parse_statement(Parser *parser) {
         return statement;
     }
 
-    if (parser_check(parser, TOK_FINAL) || parser_check(parser, TOK_VAR) ||
+    if (parser_check(parser, TOK_INTERNAL) ||
+        parser_check(parser, TOK_FINAL) || parser_check(parser, TOK_VAR) ||
         (is_type_start_token(parser_current_token(parser)->type) &&
          looks_like_local_binding_statement(parser))) {
         AstStatement *statement = ast_statement_new(AST_STMT_LOCAL_BINDING);
@@ -1190,6 +1342,10 @@ static AstStatement *parse_statement(Parser *parser) {
         }
 
         statement->source_span = parser_source_span(start_token);
+
+        if (parser_match(parser, TOK_INTERNAL)) {
+            statement->as.local_binding.is_internal = true;
+        }
 
         if (parser_match(parser, TOK_FINAL)) {
             statement->as.local_binding.is_final = true;
@@ -1995,20 +2151,68 @@ static bool is_primitive_type_token(TokenType type) {
 }
 
 static bool is_type_start_token(TokenType type) {
-    return type == TOK_VOID || is_primitive_type_token(type);
+    return type == TOK_VOID || type == TOK_IDENTIFIER || type == TOK_ARR ||
+           is_primitive_type_token(type);
+}
+
+static bool scan_generic_args_pattern(const Parser *parser, size_t *index) {
+    int depth = 1;
+
+    (*index)++;
+
+    while (depth > 0) {
+        TokenType t = parser_token_at(parser, *index)->type;
+
+        if (t == TOK_EOF) {
+            return false;
+        }
+
+        if (t == TOK_LT) {
+            depth++;
+        } else if (t == TOK_GT) {
+            depth--;
+        } else if (t == TOK_RSHIFT) {
+            if (depth < 2) {
+                return false;
+            }
+            depth -= 2;
+        }
+
+        (*index)++;
+    }
+
+    return true;
 }
 
 static bool scan_type_pattern(const Parser *parser, size_t *index) {
-    if (parser_token_at(parser, *index)->type == TOK_VOID) {
+    TokenType t = parser_token_at(parser, *index)->type;
+
+    if (t == TOK_VOID) {
         (*index)++;
         return true;
     }
 
-    if (!is_primitive_type_token(parser_token_at(parser, *index)->type)) {
+    if (t == TOK_ARR) {
+        (*index)++;
+        if (parser_token_at(parser, *index)->type != TOK_LT) {
+            return false;
+        }
+        return scan_generic_args_pattern(parser, index);
+    }
+
+    if (t == TOK_IDENTIFIER) {
+        (*index)++;
+    } else if (is_primitive_type_token(t)) {
+        (*index)++;
+    } else {
         return false;
     }
 
-    (*index)++;
+    if (parser_token_at(parser, *index)->type == TOK_LT) {
+        if (!scan_generic_args_pattern(parser, index)) {
+            return false;
+        }
+    }
 
     while (parser_token_at(parser, *index)->type == TOK_LBRACKET) {
         (*index)++;
@@ -2066,6 +2270,10 @@ static bool looks_like_lambda_expression(const Parser *parser) {
 
 static bool looks_like_local_binding_statement(const Parser *parser) {
     size_t index = parser ? parser->current : 0;
+
+    if (parser_token_at(parser, index)->type == TOK_INTERNAL) {
+        index++;
+    }
 
     if (parser_token_at(parser, index)->type == TOK_FINAL) {
         index++;

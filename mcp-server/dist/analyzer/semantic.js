@@ -49,6 +49,7 @@ class SemanticAnalyzer {
             case 'PrimitiveType': return { kind: 'primitive', name: ann.name };
             case 'VoidType': return { kind: 'void' };
             case 'ArrayType': return { kind: 'array', elementType: this.typeFromAnnotation(ann.elementType) };
+            case 'NamedType': return { kind: 'named', name: ann.name, genericArgs: ann.genericArgs.map(a => this.typeFromAnnotation(a)) };
         }
     }
     analyzeTopLevelDecl(decl) {
@@ -71,6 +72,11 @@ class SemanticAnalyzer {
             this.analyzeExpression(decl.value);
             this.defineSymbol(decl.name, type, decl);
             this.globalSymbols.set(decl.name, type);
+        }
+        else if (decl.kind === 'UnionDecl') {
+            const unionType = { kind: 'named', name: decl.name, genericArgs: decl.genericParams.map(() => ({ kind: 'unknown' })) };
+            this.defineSymbol(decl.name, unionType, decl);
+            this.globalSymbols.set(decl.name, unionType);
         }
     }
     analyzeBlock(block) {

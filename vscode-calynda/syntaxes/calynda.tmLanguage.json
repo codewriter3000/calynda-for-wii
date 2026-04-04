@@ -238,6 +238,24 @@
         {
           "name": "storage.type.primitive.calynda",
           "match": "\\b(?:void|int8|int16|int32|int64|uint8|uint16|uint32|uint64|float32|float64|bool|char|string|byte|sbyte|short|int|long|ulong|uint|float|double)\\b"
+        },
+        {
+          "comment": "User-defined type name (PascalCase identifier followed by optional generic args)",
+          "match": "\\b([A-Z][A-Za-z0-9_]*)\\s*(?=<|\\[|\\s+[a-z_])",
+          "captures": {
+            "1": {
+              "name": "entity.name.type.calynda"
+            }
+          }
+        },
+        {
+          "comment": "Union declaration name",
+          "match": "(?<=\\bunion\\s+)([A-Za-z_][A-Za-z0-9_]*)",
+          "captures": {
+            "1": {
+              "name": "entity.name.type.union.calynda"
+            }
+          }
         }
       ]
     },

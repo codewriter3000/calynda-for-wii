@@ -281,6 +281,52 @@ bool bytecode_dump_program(FILE *out, const BytecodeProgram *program) {
                         return false;
                     }
                     break;
+                case BYTECODE_INSTR_UNION_NEW:
+                    fprintf(out, "BC_UNION_NEW t%zu <- type_desc(%zu) tag=%u payload=",
+                            instruction->as.union_new.dest_temp,
+                            instruction->as.union_new.type_desc_index,
+                            instruction->as.union_new.variant_tag);
+                    if (!dump_value(out, program, unit, instruction->as.union_new.payload)) {
+                        return false;
+                    }
+                    break;
+                case BYTECODE_INSTR_UNION_GET_TAG:
+                    fprintf(out, "BC_UNION_GET_TAG t%zu <- ", instruction->as.union_get_tag.dest_temp);
+                    if (!dump_value(out, program, unit, instruction->as.union_get_tag.target)) {
+                        return false;
+                    }
+                    break;
+                case BYTECODE_INSTR_UNION_GET_PAYLOAD:
+                    fprintf(out, "BC_UNION_GET_PAYLOAD t%zu <- ", instruction->as.union_get_payload.dest_temp);
+                    if (!dump_value(out, program, unit, instruction->as.union_get_payload.target)) {
+                        return false;
+                    }
+                    break;
+                case BYTECODE_INSTR_HETERO_ARRAY_NEW:
+                    fprintf(out, "BC_HETERO_ARRAY_NEW t%zu <- [",
+                            instruction->as.hetero_array_new.dest_temp);
+                    for (item_index = 0;
+                         item_index < instruction->as.hetero_array_new.element_count;
+                         item_index++) {
+                        if (item_index > 0 && fputs(", ", out) == EOF) {
+                            return false;
+                        }
+                        if (!dump_value(out, program, unit,
+                                        instruction->as.hetero_array_new.elements[item_index])) {
+                            return false;
+                        }
+                    }
+                    fputc(']', out);
+                    break;
+                case BYTECODE_INSTR_HETERO_ARRAY_GET_TAG:
+                    fprintf(out, "BC_HETERO_ARRAY_GET_TAG t%zu <- ", instruction->as.hetero_array_get_tag.dest_temp);
+                    if (!dump_value(out, program, unit, instruction->as.hetero_array_get_tag.target) ||
+                        fputc('[', out) == EOF ||
+                        !dump_value(out, program, unit, instruction->as.hetero_array_get_tag.index) ||
+                        fputc(']', out) == EOF) {
+                        return false;
+                    }
+                    break;
                 }
                 fputc('\n', out);
             }

@@ -17,7 +17,9 @@ typedef enum {
     CALYNDA_RT_OBJECT_ARRAY,
     CALYNDA_RT_OBJECT_CLOSURE,
     CALYNDA_RT_OBJECT_PACKAGE,
-    CALYNDA_RT_OBJECT_EXTERN_CALLABLE
+    CALYNDA_RT_OBJECT_EXTERN_CALLABLE,
+    CALYNDA_RT_OBJECT_UNION,
+    CALYNDA_RT_OBJECT_HETERO_ARRAY
 } CalyndaRtObjectKind;
 
 typedef enum {
@@ -38,7 +40,9 @@ typedef enum {
     CALYNDA_RT_TYPE_ARRAY,
     CALYNDA_RT_TYPE_CLOSURE,
     CALYNDA_RT_TYPE_EXTERNAL,
-    CALYNDA_RT_TYPE_RAW_WORD
+    CALYNDA_RT_TYPE_RAW_WORD,
+    CALYNDA_RT_TYPE_UNION,
+    CALYNDA_RT_TYPE_HETERO_ARRAY
 } CalyndaRtTypeTag;
 
 typedef struct {
@@ -86,6 +90,28 @@ typedef struct {
     CalyndaRtWord payload;
 } CalyndaRtTemplatePart;
 
+typedef struct {
+    const char       *name;
+    size_t            generic_param_count;
+    size_t            variant_count;
+    const char *const *variant_names;
+    const CalyndaRtTypeTag *variant_payload_tags;
+} CalyndaRtTypeDescriptor;
+
+typedef struct {
+    CalyndaRtObjectHeader        header;
+    const CalyndaRtTypeDescriptor *type_desc;
+    uint32_t                      tag;
+    CalyndaRtWord                 payload;
+} CalyndaRtUnion;
+
+typedef struct {
+    CalyndaRtObjectHeader  header;
+    size_t                 count;
+    CalyndaRtWord         *elements;
+    CalyndaRtTypeTag      *element_tags;
+} CalyndaRtHeteroArray;
+
 extern CalyndaRtPackage __calynda_pkg_stdlib;
 
 bool calynda_rt_is_object(CalyndaRtWord word);
@@ -125,5 +151,17 @@ void __calynda_rt_store_member(CalyndaRtWord target,
 void __calynda_rt_throw(CalyndaRtWord value) __attribute__((noreturn));
 CalyndaRtWord __calynda_rt_cast_value(CalyndaRtWord source,
                                       CalyndaRtTypeTag target_type_tag);
+
+CalyndaRtWord __calynda_rt_union_new(const CalyndaRtTypeDescriptor *type_desc,
+                                     uint32_t variant_tag,
+                                     CalyndaRtWord payload);
+uint32_t __calynda_rt_union_get_tag(CalyndaRtWord value);
+CalyndaRtWord __calynda_rt_union_get_payload(CalyndaRtWord value);
+bool __calynda_rt_union_check_tag(CalyndaRtWord value, uint32_t expected_tag);
+
+CalyndaRtWord __calynda_rt_hetero_array_new(size_t element_count,
+                                            const CalyndaRtWord *elements,
+                                            const CalyndaRtTypeTag *element_tags);
+CalyndaRtTypeTag __calynda_rt_hetero_array_get_tag(CalyndaRtWord target, CalyndaRtWord index);
 
 #endif /* CALYNDA_RUNTIME_H */

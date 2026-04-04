@@ -138,6 +138,15 @@ void ast_type_init_arr(AstType *type) {
     type->kind = AST_TYPE_ARR;
 }
 
+void ast_type_init_named(AstType *type, const char *name) {
+    if (!type) {
+        return;
+    }
+    memset(type, 0, sizeof(*type));
+    type->kind = AST_TYPE_NAMED;
+    type->name = ast_copy_text(name);
+}
+
 void ast_type_free(AstType *type) {
     size_t i;
 
@@ -149,6 +158,7 @@ void ast_type_free(AstType *type) {
         free(type->dimensions[i].size_literal);
     }
 
+    free(type->name);
     free(type->dimensions);
     ast_generic_arg_list_free(&type->generic_args);
     memset(type, 0, sizeof(*type));
@@ -628,6 +638,33 @@ bool ast_binding_decl_add_modifier(AstBindingDecl *decl, AstModifier modifier) {
 
     decl->modifiers[decl->modifier_count++] = modifier;
     return true;
+}
+
+bool ast_union_decl_add_modifier(AstUnionDecl *decl, AstModifier modifier) {
+    if (!decl) {
+        return false;
+    }
+
+    if (!reserve_items((void **)&decl->modifiers, &decl->modifier_capacity,
+                       decl->modifier_count + 1, sizeof(*decl->modifiers))) {
+        return false;
+    }
+
+    decl->modifiers[decl->modifier_count++] = modifier;
+    return true;
+}
+
+bool ast_decl_has_modifier(const AstModifier *modifiers, size_t count,
+                           AstModifier modifier) {
+    size_t i;
+
+    for (i = 0; i < count; i++) {
+        if (modifiers[i] == modifier) {
+            return true;
+        }
+    }
+
+    return false;
 }
 
 void ast_program_init(AstProgram *program) {

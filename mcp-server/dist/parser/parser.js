@@ -20,7 +20,7 @@ const PRIMITIVE_TYPES = new Set([
     'float32', 'float64',
     'bool', 'char', 'string',
 ]);
-const MODIFIERS = new Set(['public', 'private', 'final']);
+const MODIFIERS = new Set(['public', 'private', 'final', 'export', 'static', 'internal']);
 const ASSIGNMENT_OPS = new Set(['=', '+=', '-=', '*=', '/=', '%=', '&=', '|=', '^=', '<<=', '>>=']);
 class Parser {
     tokens;
@@ -126,6 +126,13 @@ class Parser {
         if (this.check('keyword', 'var') || this.check('type') || this.check('keyword', 'void')) {
             return this.parseBindingDecl(modifiers);
         }
+        if (this.check('keyword', 'union')) {
+            return this.parseUnionDecl(modifiers);
+        }
+        /* An identifier in type position could be a named type used as a binding type annotation */
+        if (this.check('identifier')) {
+            return this.parseBindingDecl(modifiers);
+        }
         const tok = this.peek();
         throw new ParseError(`Unexpected token '${tok.value}'`, tok.line, tok.column);
     }
@@ -155,6 +162,45 @@ class Parser {
         this.eat('semicolon');
         return { kind: 'BindingDecl', modifiers, typeAnnotation, name, value, start: startPos, end: this.position() };
     }
+    parseUnionDecl(modifiers) {
+        const startPos = this.position();
+        this.eat('keyword', 'union');
+        const name = this.eat('identifier').value;
+        const genericParams = [];
+        if (this.check('lt')) {
+            this.advance();
+            genericParams.push(this.eat('identifier').value);
+            while (this.check('comma')) {
+                this.advance();
+                genericParams.push(this.eat('identifier').value);
+            }
+            this.eat('gt');
+        }
+        this.eat('lbrace');
+        const variants = [];
+        if (!this.check('rbrace')) {
+            variants.push(this.parseUnionVariant());
+            while (this.check('comma')) {
+                this.advance();
+                if (this.check('rbrace'))
+                    break;
+                variants.push(this.parseUnionVariant());
+            }
+        }
+        this.eat('rbrace');
+        this.eat('semicolon');
+        return { kind: 'UnionDecl', modifiers, name, genericParams, variants, start: startPos, end: this.position() };
+    }
+    parseUnionVariant() {
+        const name = this.eat('identifier').value;
+        let payloadType;
+        if (this.check('lparen')) {
+            this.advance();
+            payloadType = this.parseType();
+            this.eat('rparen');
+        }
+        return { name, payloadType };
+    }
     parseType() {
         const startPos = this.position();
         if (this.check('keyword', 'void')) {
@@ -163,8 +209,22 @@ class Parser {
             const voidNode = { kind: 'VoidType', start: startPos, end };
             return voidNode;
         }
-        const typeTok = this.eat('type');
-        let typeNode = { kind: 'PrimitiveType', name: typeTok.value, start: this.tokenToPosition(typeTok), end: this.position() };
+        if (this.check('keyword', 'arr')) {
+            this.advance();
+            const genericArgs = this.parseGenericArgs();
+            const namedNode = { kind: 'NamedType', name: 'arr', genericArgs, start: startPos, end: this.position() };
+            return namedNode;
+        }
+        let typeNode;
+        if (this.check('identifier')) {
+            const nameTok = this.advance();
+            const genericArgs = this.check('lt') ? this.parseGenericArgs() : [];
+            typeNode = { kind: 'NamedType', name: nameTok.value, genericArgs, start: this.tokenToPosition(nameTok), end: this.position() };
+        }
+        else {
+            const typeTok = this.eat('type');
+            typeNode = { kind: 'PrimitiveType', name: typeTok.value, start: this.tokenToPosition(typeTok), end: this.position() };
+        }
         while (this.check('lbracket')) {
             const arrStart = this.position();
             this.advance();
@@ -176,6 +236,25 @@ class Parser {
             typeNode = { kind: 'ArrayType', elementType: typeNode, size, start: arrStart, end: this.position() };
         }
         return typeNode;
+    }
+    parseGenericArg() {
+        if (this.check('question')) {
+            const pos = this.position();
+            this.advance();
+            return { kind: 'NamedType', name: '?', genericArgs: [], start: pos, end: this.position() };
+        }
+        return this.parseType();
+    }
+    parseGenericArgs() {
+        const args = [];
+        this.eat('lt');
+        args.push(this.parseGenericArg());
+        while (this.check('comma')) {
+            this.advance();
+            args.push(this.parseGenericArg());
+        }
+        this.eat('gt');
+        return args;
     }
     parseParameterList() {
         const params = [];

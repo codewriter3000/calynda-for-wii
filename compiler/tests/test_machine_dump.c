@@ -133,7 +133,12 @@ static void test_runtime_abi_dump_defines_helper_surface(void) {
         "  helper __calynda_rt_store_index return=void args=[rdi=target_value, rsi=index_value, rdx=store_value]\n"
         "  helper __calynda_rt_store_member return=void args=[rdi=target_value, rsi=member_symbol, rdx=store_value]\n"
         "  helper __calynda_rt_throw return=noreturn args=[rdi=throw_value]\n"
-        "  helper __calynda_rt_cast_value return=rax args=[rdi=source_value, rsi=target_type_tag]\n";
+        "  helper __calynda_rt_cast_value return=rax args=[rdi=source_value, rsi=target_type_tag]\n"
+        "  helper __calynda_rt_union_new return=rax args=[rdi=type_descriptor, rsi=variant_tag, rdx=payload_value]\n"
+        "  helper __calynda_rt_union_get_tag return=rax args=[rdi=target_value]\n"
+        "  helper __calynda_rt_union_get_payload return=rax args=[rdi=target_value]\n"
+        "  helper __calynda_rt_hetero_array_new return=rax args=[rdi=element_count, rsi=element_pack, rdx=element_tag_pack] pack=value-word\n"
+        "  helper __calynda_rt_hetero_array_get_tag return=rax args=[rdi=target_value, rsi=index_value]\n";
     char *dump;
 
     dump = runtime_abi_dump_surface_to_string(CODEGEN_TARGET_X86_64_SYSV_ELF);
@@ -163,6 +168,11 @@ static void test_machine_dump_emits_minimal_direct_instruction_stream(void) {
         "  helper __calynda_rt_store_member return=void args=[rdi=target_value, rsi=member_symbol, rdx=store_value]\n"
         "  helper __calynda_rt_throw return=noreturn args=[rdi=throw_value]\n"
         "  helper __calynda_rt_cast_value return=rax args=[rdi=source_value, rsi=target_type_tag]\n"
+        "  helper __calynda_rt_union_new return=rax args=[rdi=type_descriptor, rsi=variant_tag, rdx=payload_value]\n"
+        "  helper __calynda_rt_union_get_tag return=rax args=[rdi=target_value]\n"
+        "  helper __calynda_rt_union_get_payload return=rax args=[rdi=target_value]\n"
+        "  helper __calynda_rt_hetero_array_new return=rax args=[rdi=element_count, rsi=element_pack, rdx=element_tag_pack] pack=value-word\n"
+        "  helper __calynda_rt_hetero_array_get_tag return=rax args=[rdi=target_value, rsi=index_value]\n"
         "  Unit name=add kind=binding return=int32 frame_slots=2 spills=0 helper_slots=0 outgoing_stack=0 blocks=1\n"
         "    Blocks:\n"
         "      Block bb0:\n"

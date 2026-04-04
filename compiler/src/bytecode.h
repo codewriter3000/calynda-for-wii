@@ -2,9 +2,11 @@
 #define CALYNDA_BYTECODE_H
 
 #include "mir.h"
+#include "runtime.h"
 
 #include <stdbool.h>
 #include <stddef.h>
+#include <stdint.h>
 #include <stdio.h>
 
 typedef struct BytecodeInstruction BytecodeInstruction;
@@ -94,7 +96,12 @@ typedef enum {
     BYTECODE_INSTR_STORE_LOCAL,
     BYTECODE_INSTR_STORE_GLOBAL,
     BYTECODE_INSTR_STORE_INDEX,
-    BYTECODE_INSTR_STORE_MEMBER
+    BYTECODE_INSTR_STORE_MEMBER,
+    BYTECODE_INSTR_UNION_NEW,
+    BYTECODE_INSTR_UNION_GET_TAG,
+    BYTECODE_INSTR_UNION_GET_PAYLOAD,
+    BYTECODE_INSTR_HETERO_ARRAY_NEW,
+    BYTECODE_INSTR_HETERO_ARRAY_GET_TAG
 } BytecodeInstructionKind;
 
 struct BytecodeInstruction {
@@ -167,6 +174,31 @@ struct BytecodeInstruction {
             size_t       member_index;
             BytecodeValue value;
         } store_member;
+        struct {
+            size_t         dest_temp;
+            size_t         type_desc_index;
+            uint32_t       variant_tag;
+            BytecodeValue  payload;
+        } union_new;
+        struct {
+            size_t        dest_temp;
+            BytecodeValue target;
+        } union_get_tag;
+        struct {
+            size_t        dest_temp;
+            BytecodeValue target;
+        } union_get_payload;
+        struct {
+            size_t             dest_temp;
+            BytecodeValue     *elements;
+            size_t             element_count;
+            CalyndaRtTypeTag  *element_tags;
+        } hetero_array_new;
+        struct {
+            size_t        dest_temp;
+            BytecodeValue target;
+            BytecodeValue index;
+        } hetero_array_get_tag;
     } as;
 };
 

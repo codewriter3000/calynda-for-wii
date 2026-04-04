@@ -187,12 +187,96 @@ static void test_type_resolver_rejects_zero_sized_array(void) {
     parser_free(&parser);
 }
 
+static void test_type_resolver_resolves_named_types(void) {
+    const char *source =
+        "union Option<T> { Some(T), None };\n"
+        "start(string[] args) -> {\n"
+        "    Option<int32> value = 42;\n"
+        "    return 0;\n"
+        "};\n";
+    Parser parser;
+    AstProgram program;
+    TypeResolver resolver;
+    const AstStatement *stmt;
+    const AstStartDecl *start_decl;
+    const ResolvedType *resolved;
+
+    type_resolver_init(&resolver);
+    parser_init(&parser, source);
+    REQUIRE_TRUE(parser_parse_program(&parser, &program), "parse named type program");
+    ASSERT_TRUE(type_resolver_resolve_program(&resolver, &program),
+                "named type passes type resolution");
+
+    start_decl = &program.top_level_decls[1]->as.start_decl;
+    stmt = start_decl->body.as.block->statements[0];
+    resolved = type_resolver_get_type(&resolver,
+                                      &stmt->as.local_binding.declared_type);
+    REQUIRE_TRUE(resolved != NULL, "resolved type exists");
+    ASSERT_EQ_INT(RESOLVED_TYPE_NAMED, resolved->kind, "resolved type is named");
+    ASSERT_EQ_STR("Option", resolved->name, "resolved name is Option");
+    ASSERT_EQ_INT(1, (int)resolved->generic_arg_count, "one generic arg");
+
+    type_resolver_free(&resolver);
+    ast_program_free(&program);
+    parser_free(&parser);
+}
+
+static void test_type_resolver_resolves_arr_wildcard(void) {
+    const char *source =
+        "arr<?> record = [1, \"hello\"];\n"
+        "start(string[] args) -> 0;\n";
+    Parser parser;
+    AstProgram program;
+    TypeResolver resolver;
+    const AstBindingDecl *binding;
+    const ResolvedType *resolved;
+
+    type_resolver_init(&resolver);
+    parser_init(&parser, source);
+    REQUIRE_TRUE(parser_parse_program(&parser, &program), "parse arr wildcard program");
+    ASSERT_TRUE(type_resolver_resolve_program(&resolver, &program),
+                "arr<?> passes type resolution");
+
+    binding = &program.top_level_decls[0]->as.binding_decl;
+    resolved = type_resolver_get_type(&resolver, &binding->declared_type);
+    REQUIRE_TRUE(resolved != NULL, "resolved arr type exists");
+    ASSERT_EQ_INT(RESOLVED_TYPE_NAMED, resolved->kind, "resolved type is named");
+    ASSERT_EQ_STR("arr", resolved->name, "resolved name is arr");
+    ASSERT_EQ_INT(1, (int)resolved->generic_arg_count, "one generic arg");
+
+    type_resolver_free(&resolver);
+    ast_program_free(&program);
+    parser_free(&parser);
+}
+
+static void test_type_resolver_resolves_union_variant_payload(void) {
+    const char *source =
+        "union Result<T, E> { Ok(T), Err(E) };\n"
+        "start(string[] args) -> 0;\n";
+    Parser parser;
+    AstProgram program;
+    TypeResolver resolver;
+
+    type_resolver_init(&resolver);
+    parser_init(&parser, source);
+    REQUIRE_TRUE(parser_parse_program(&parser, &program), "parse variant payload program");
+    ASSERT_TRUE(type_resolver_resolve_program(&resolver, &program),
+                "union variant payloads pass type resolution");
+
+    type_resolver_free(&resolver);
+    ast_program_free(&program);
+    parser_free(&parser);
+}
+
 int main(void) {
     printf("Running type resolution tests...\n\n");
 
     RUN_TEST(test_type_resolver_resolves_declared_types_and_casts);
     RUN_TEST(test_type_resolver_rejects_void_parameter);
     RUN_TEST(test_type_resolver_rejects_zero_sized_array);
+    RUN_TEST(test_type_resolver_resolves_named_types);
+    RUN_TEST(test_type_resolver_resolves_arr_wildcard);
+    RUN_TEST(test_type_resolver_resolves_union_variant_payload);
 
     printf("\n========================================\n");
     printf("  Total: %d  |  Passed: %d  |  Failed: %d\n",

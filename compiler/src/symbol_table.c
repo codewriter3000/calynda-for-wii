@@ -16,6 +16,8 @@ static Symbol *symbol_new(SymbolTable *table, SymbolKind kind,
                           const char *name, const char *qualified_name,
                           const AstType *declared_type,
                           bool is_inferred_type, bool is_final,
+                          bool is_exported, bool is_static,
+                          bool is_internal,
                           AstSourceSpan declaration_span,
                           const void *declaration, Scope *scope);
 static bool scope_append_symbol(SymbolTable *table, Scope *scope, Symbol *symbol);
@@ -39,6 +41,8 @@ static bool analyze_top_level_decl(SymbolTable *table,
                                    const AstTopLevelDecl *decl,
                                    Scope *scope);
 static bool analyze_start_decl(SymbolTable *table, const AstStartDecl *start_decl,
+                               Scope *parent_scope);
+static bool analyze_union_decl(SymbolTable *table, const AstUnionDecl *union_decl,
                                Scope *parent_scope);
 static bool analyze_lambda_expression(SymbolTable *table,
                                       const AstExpression *lambda_expression,
@@ -210,6 +214,12 @@ const char *symbol_kind_name(SymbolKind kind) {
         return "parameter";
     case SYMBOL_KIND_LOCAL:
         return "local";
+    case SYMBOL_KIND_UNION:
+        return "union";
+    case SYMBOL_KIND_TYPE_PARAMETER:
+        return "type parameter";
+    case SYMBOL_KIND_VARIANT:
+        return "variant";
     }
 
     return "unknown";
@@ -225,6 +235,8 @@ const char *scope_kind_name(ScopeKind kind) {
         return "lambda scope";
     case SCOPE_KIND_BLOCK:
         return "block scope";
+    case SCOPE_KIND_UNION:
+        return "union scope";
     }
 
     return "unknown scope";
@@ -318,6 +330,23 @@ const Symbol *symbol_table_resolve_identifier(const SymbolTable *table,
     for (i = 0; i < table->resolution_count; i++) {
         if (table->resolutions[i].identifier == identifier) {
             return table->resolutions[i].symbol;
+        }
+    }
+
+    return NULL;
+}
+
+const SymbolResolution *symbol_table_find_resolution(const SymbolTable *table,
+                                                     const AstExpression *identifier) {
+    size_t i;
+
+    if (!table || !identifier) {
+        return NULL;
+    }
+
+    for (i = 0; i < table->resolution_count; i++) {
+        if (table->resolutions[i].identifier == identifier) {
+            return &table->resolutions[i];
         }
     }
 
@@ -447,6 +476,8 @@ static Symbol *symbol_new(SymbolTable *table, SymbolKind kind,
                           const char *name, const char *qualified_name,
                           const AstType *declared_type,
                           bool is_inferred_type, bool is_final,
+                          bool is_exported, bool is_static,
+                          bool is_internal,
                           AstSourceSpan declaration_span,
                           const void *declaration, Scope *scope) {
     Symbol *symbol = calloc(1, sizeof(*symbol));
@@ -460,6 +491,9 @@ static Symbol *symbol_new(SymbolTable *table, SymbolKind kind,
     symbol->declared_type = declared_type;
     symbol->is_inferred_type = is_inferred_type;
     symbol->is_final = is_final;
+    symbol->is_exported = is_exported;
+    symbol->is_static = is_static;
+    symbol->is_internal = is_internal;
     symbol->declaration_span = declaration_span;
     symbol->declaration = declaration;
     symbol->scope = scope;
@@ -652,6 +686,7 @@ static bool add_package_symbol(SymbolTable *table, const AstProgram *program) {
     table->package_symbol = symbol_new(table, SYMBOL_KIND_PACKAGE,
                                        name, qualified_name,
                                        NULL, false, false,
+                                       false, false, false,
                                        program->package_name.tail_span,
                                        &program->package_name, NULL);
     free(name);
@@ -697,6 +732,7 @@ static bool add_import_symbols(SymbolTable *table, const AstProgram *program) {
 
             symbol = symbol_new(table, SYMBOL_KIND_IMPORT, name, qualified_name,
                                 NULL, false, false,
+                                false, false, false,
                                 imp->module_name.tail_span,
                                 imp, table->root_scope);
             free(name);
@@ -729,6 +765,7 @@ static bool add_import_symbols(SymbolTable *table, const AstProgram *program) {
 
             symbol = symbol_new(table, SYMBOL_KIND_IMPORT, imp->alias, qualified_name,
                                 NULL, false, false,
+                                false, false, false,
                                 imp->module_name.tail_span,
                                 imp, table->root_scope);
             free(qualified_name);
@@ -745,9 +782,11 @@ static bool add_import_symbols(SymbolTable *table, const AstProgram *program) {
 
         case AST_IMPORT_WILDCARD:
             /* Wildcard imports bind names lazily at resolution time.
-               For now, record the import itself so downstream passes
-               know the module was imported; individual name binding
-               requires a module loader that is not yet implemented. */
+               Ambiguity detection across multiple wildcard imports
+               requires a module loader to know each module's exported
+               names.  Once a module loader exists, duplicate exported
+               names from different wildcard imports must be flagged as
+               compile errors per the V2 ambiguity spec. */
             free(qualified_name);
             break;
 
@@ -789,6 +828,7 @@ static bool add_import_symbols(SymbolTable *table, const AstProgram *program) {
                 symbol = symbol_new(table, SYMBOL_KIND_IMPORT,
                                     imp->selected_names[j], sel_qualified,
                                     NULL, false, false,
+                                    false, false, false,
                                     imp->module_name.tail_span,
                                     imp, table->root_scope);
                 free(sel_qualified);
@@ -843,12 +883,63 @@ static bool predeclare_top_level_bindings(SymbolTable *table, const AstProgram *
                                 &binding_decl->declared_type,
                                 binding_decl->is_inferred_type,
                                 top_level_binding_is_final(binding_decl),
+                                ast_decl_has_modifier(binding_decl->modifiers,
+                                                      binding_decl->modifier_count,
+                                                      AST_MODIFIER_EXPORT),
+                                ast_decl_has_modifier(binding_decl->modifiers,
+                                                      binding_decl->modifier_count,
+                                                      AST_MODIFIER_STATIC),
+                                ast_decl_has_modifier(binding_decl->modifiers,
+                                                      binding_decl->modifier_count,
+                                                      AST_MODIFIER_INTERNAL),
                                 binding_decl->name_span,
                                 binding_decl,
                                 table->root_scope);
             if (!symbol) {
                 return false;
             }
+
+            if (!scope_append_symbol(table, table->root_scope, symbol)) {
+                symbol_free(symbol);
+                return false;
+            }
+        } else if (decl->kind == AST_TOP_LEVEL_UNION) {
+            const AstUnionDecl *union_decl = &decl->as.union_decl;
+            const Symbol *conflicting_symbol = scope_lookup_local(table->root_scope,
+                                                                  union_decl->name);
+            if (!conflicting_symbol) {
+                conflicting_symbol = symbol_table_find_import(table, union_decl->name);
+            }
+            Symbol *symbol;
+
+            if (conflicting_symbol) {
+                symbol_table_set_error_at(table,
+                                          union_decl->name_span,
+                                          &conflicting_symbol->declaration_span,
+                                          "Duplicate symbol '%s' in %s.",
+                                          union_decl->name,
+                                          scope_kind_name(table->root_scope->kind));
+                return false;
+            }
+
+            symbol = symbol_new(table, SYMBOL_KIND_UNION,
+                                union_decl->name, NULL,
+                                NULL, false, false,
+                                ast_decl_has_modifier(union_decl->modifiers,
+                                                      union_decl->modifier_count,
+                                                      AST_MODIFIER_EXPORT),
+                                ast_decl_has_modifier(union_decl->modifiers,
+                                                      union_decl->modifier_count,
+                                                      AST_MODIFIER_STATIC),
+                                false,
+                                union_decl->name_span,
+                                union_decl,
+                                table->root_scope);
+            if (!symbol) {
+                return false;
+            }
+
+            symbol->generic_param_count = union_decl->generic_param_count;
 
             if (!scope_append_symbol(table, table->root_scope, symbol)) {
                 symbol_free(symbol);
@@ -870,7 +961,7 @@ static bool analyze_top_level_decl(SymbolTable *table,
         return analyze_expression(table, decl->as.binding_decl.initializer, scope);
 
     case AST_TOP_LEVEL_UNION:
-        return true;
+        return analyze_union_decl(table, &decl->as.union_decl, scope);
     }
 
     return false;
@@ -893,6 +984,56 @@ static bool analyze_start_decl(SymbolTable *table, const AstStartDecl *start_dec
     }
 
     return analyze_expression(table, start_decl->body.as.expression, start_scope);
+}
+
+static bool analyze_union_decl(SymbolTable *table, const AstUnionDecl *union_decl,
+                               Scope *parent_scope) {
+    size_t i;
+    Scope *union_scope = scope_new(table, SCOPE_KIND_UNION,
+                                   union_decl, parent_scope);
+    if (!union_scope) {
+        return false;
+    }
+
+    for (i = 0; i < union_decl->generic_param_count; i++) {
+        Symbol *type_param = symbol_new(table, SYMBOL_KIND_TYPE_PARAMETER,
+                                        union_decl->generic_params[i], NULL,
+                                        NULL, false, false, false, false, false,
+                                        union_decl->name_span,
+                                        union_decl,
+                                        union_scope);
+        if (!type_param) {
+            return false;
+        }
+
+        if (!scope_append_symbol(table, union_scope, type_param)) {
+            symbol_free(type_param);
+            return false;
+        }
+    }
+
+    for (i = 0; i < union_decl->variant_count; i++) {
+        Symbol *variant_sym = symbol_new(table, SYMBOL_KIND_VARIANT,
+                                         union_decl->variants[i].name, NULL,
+                                         union_decl->variants[i].payload_type,
+                                         false, false, false, false, false,
+                                         union_decl->name_span,
+                                         union_decl,
+                                         union_scope);
+        if (!variant_sym) {
+            return false;
+        }
+        variant_sym->variant_index = i;
+        variant_sym->variant_has_payload = (union_decl->variants[i].payload_type != NULL);
+        variant_sym->variant_payload_type = union_decl->variants[i].payload_type;
+
+        if (!scope_append_symbol(table, union_scope, variant_sym)) {
+            symbol_free(variant_sym);
+            return false;
+        }
+    }
+
+    return true;
 }
 
 static bool analyze_lambda_expression(SymbolTable *table,
@@ -1093,6 +1234,7 @@ static bool add_parameter_symbols(SymbolTable *table,
                             parameter->name, NULL,
                             &parameter->type,
                             false, false,
+                            false, false, false,
                             parameter->name_span,
                             parameter, scope);
         if (!symbol) {
@@ -1129,6 +1271,8 @@ static bool add_local_symbol(SymbolTable *table,
                         &binding->declared_type,
                         binding->is_inferred_type,
                         binding->is_final,
+                        false, false,
+                        binding->is_internal,
                         binding->name_span,
                         binding, scope);
     if (!symbol) {

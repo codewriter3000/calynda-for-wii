@@ -53,6 +53,15 @@ bool hir_dump_program(FILE *out, const HirProgram *program) {
                 return false;
             }
             fprintf(out, " final=%s", decl->as.binding.is_final ? "true" : "false");
+            if (decl->as.binding.is_exported) {
+                fprintf(out, " exported");
+            }
+            if (decl->as.binding.is_static) {
+                fprintf(out, " static");
+            }
+            if (decl->as.binding.is_internal) {
+                fprintf(out, " internal");
+            }
             if (decl->as.binding.is_callable) {
                 fprintf(out, " callable=");
                 if (!write_callable_signature(out, &decl->as.binding.callable_signature)) {
@@ -66,6 +75,34 @@ bool hir_dump_program(FILE *out, const HirProgram *program) {
             if (!dump_expression(out, decl->as.binding.initializer, 8)) {
                 return false;
             }
+        } else if (decl->kind == HIR_TOP_LEVEL_UNION) {
+            size_t j;
+
+            fprintf(out, "    Union name=%s", decl->as.union_decl.name);
+            if (decl->as.union_decl.is_exported) {
+                fprintf(out, " exported");
+            }
+            if (decl->as.union_decl.is_static) {
+                fprintf(out, " static");
+            }
+            if (decl->as.union_decl.generic_param_count > 0) {
+                fprintf(out, " generics=<");
+                for (j = 0; j < decl->as.union_decl.generic_param_count; j++) {
+                    if (j > 0) fprintf(out, ", ");
+                    fprintf(out, "%s", decl->as.union_decl.generic_params[j]);
+                }
+                fprintf(out, ">");
+            }
+            fprintf(out, " span=");
+            write_span(out, decl->as.union_decl.source_span);
+            fputc('\n', out);
+            for (j = 0; j < decl->as.union_decl.variant_count; j++) {
+                fprintf(out, "      Variant name=%s", decl->as.union_decl.variants[j].name);
+                if (decl->as.union_decl.variants[j].has_payload) {
+                    fprintf(out, " has_payload=true");
+                }
+                fputc('\n', out);
+            }
         } else {
             size_t j;
 
@@ -77,6 +114,9 @@ bool hir_dump_program(FILE *out, const HirProgram *program) {
                 fprintf(out, "        Param name=%s type=", decl->as.start.parameters.items[j].name);
                 if (!write_checked_type(out, decl->as.start.parameters.items[j].type)) {
                     return false;
+                }
+                if (decl->as.start.parameters.items[j].is_varargs) {
+                    fprintf(out, " varargs");
                 }
                 fprintf(out, " span=");
                 write_span(out, decl->as.start.parameters.items[j].source_span);
@@ -391,6 +431,9 @@ static bool dump_expression(FILE *out, const HirExpression *expression, int inde
             if (!write_checked_type(out, expression->as.lambda.parameters.items[i].type)) {
                 return false;
             }
+            if (expression->as.lambda.parameters.items[i].is_varargs) {
+                fprintf(out, " varargs");
+            }
             fprintf(out, " span=");
             write_span(out, expression->as.lambda.parameters.items[i].source_span);
             fputc('\n', out);
@@ -537,6 +580,33 @@ static bool dump_expression(FILE *out, const HirExpression *expression, int inde
             }
         }
         return true;
+    case HIR_EXPR_DISCARD:
+        fprintf(out, "Discard type=");
+        if (!write_checked_type(out, expression->type)) {
+            return false;
+        }
+        fprintf(out, " span=");
+        write_span(out, expression->source_span);
+        fputc('\n', out);
+        return true;
+    case HIR_EXPR_POST_INCREMENT:
+        fprintf(out, "PostIncrement type=");
+        if (!write_checked_type(out, expression->type)) {
+            return false;
+        }
+        fprintf(out, " span=");
+        write_span(out, expression->source_span);
+        fputc('\n', out);
+        return dump_expression(out, expression->as.post_increment.operand, indent + 2);
+    case HIR_EXPR_POST_DECREMENT:
+        fprintf(out, "PostDecrement type=");
+        if (!write_checked_type(out, expression->type)) {
+            return false;
+        }
+        fprintf(out, " span=");
+        write_span(out, expression->source_span);
+        fputc('\n', out);
+        return dump_expression(out, expression->as.post_decrement.operand, indent + 2);
     }
 
     return false;

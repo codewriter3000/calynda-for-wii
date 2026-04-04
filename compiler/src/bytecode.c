@@ -288,6 +288,15 @@ static void bytecode_instruction_free(BytecodeInstruction *instruction) {
     case BYTECODE_INSTR_STORE_GLOBAL:
     case BYTECODE_INSTR_STORE_INDEX:
     case BYTECODE_INSTR_STORE_MEMBER:
+    case BYTECODE_INSTR_UNION_NEW:
+    case BYTECODE_INSTR_UNION_GET_TAG:
+    case BYTECODE_INSTR_UNION_GET_PAYLOAD:
+        break;
+    case BYTECODE_INSTR_HETERO_ARRAY_NEW:
+        free(instruction->as.hetero_array_new.elements);
+        free(instruction->as.hetero_array_new.element_tags);
+        break;
+    case BYTECODE_INSTR_HETERO_ARRAY_GET_TAG:
         break;
     }
 
@@ -513,6 +522,31 @@ static size_t intern_literal_constant(BytecodeBuildContext *context,
     context->program->constants[i].as.literal.text = normalized_text;
     context->program->constants[i].as.literal.bool_value = bool_value;
     return i;
+}
+
+static CalyndaRtTypeTag checked_type_to_runtime_tag(CheckedType type) {
+    if (type.kind == CHECKED_TYPE_VALUE && type.array_depth > 0) {
+        return CALYNDA_RT_TYPE_ARRAY;
+    }
+    if (type.kind == CHECKED_TYPE_VALUE && type.array_depth == 0) {
+        switch (type.primitive) {
+        case AST_PRIMITIVE_BOOL:    return CALYNDA_RT_TYPE_BOOL;
+        case AST_PRIMITIVE_STRING:  return CALYNDA_RT_TYPE_STRING;
+        case AST_PRIMITIVE_INT64:
+        case AST_PRIMITIVE_UINT64:  return CALYNDA_RT_TYPE_INT64;
+        default:                    return CALYNDA_RT_TYPE_INT32;
+        }
+    }
+    if (type.kind == CHECKED_TYPE_NAMED) {
+        if (type.name && strcmp(type.name, "arr") == 0) {
+            return CALYNDA_RT_TYPE_HETERO_ARRAY;
+        }
+        return CALYNDA_RT_TYPE_UNION;
+    }
+    if (type.kind == CHECKED_TYPE_EXTERNAL) {
+        return CALYNDA_RT_TYPE_EXTERNAL;
+    }
+    return CALYNDA_RT_TYPE_INT32;
 }
 
 static bool bytecode_value_from_mir_value(BytecodeBuildContext *context,
@@ -771,6 +805,57 @@ static bool lower_instruction(BytecodeBuildContext *context,
                bytecode_value_from_mir_value(context,
                                              instruction->as.store_member.value,
                                              &lowered->as.store_member.value);
+
+    case MIR_INSTR_HETERO_ARRAY_NEW:
+        lowered->kind = BYTECODE_INSTR_HETERO_ARRAY_NEW;
+        lowered->as.hetero_array_new.dest_temp = instruction->as.hetero_array_new.dest_temp;
+        lowered->as.hetero_array_new.element_count = instruction->as.hetero_array_new.element_count;
+        if (lowered->as.hetero_array_new.element_count > 0) {
+            lowered->as.hetero_array_new.elements = calloc(
+                lowered->as.hetero_array_new.element_count,
+                sizeof(*lowered->as.hetero_array_new.elements));
+            lowered->as.hetero_array_new.element_tags = calloc(
+                lowered->as.hetero_array_new.element_count,
+                sizeof(*lowered->as.hetero_array_new.element_tags));
+            if (!lowered->as.hetero_array_new.elements ||
+                !lowered->as.hetero_array_new.element_tags) {
+                return false;
+            }
+        }
+        for (i = 0; i < lowered->as.hetero_array_new.element_count; i++) {
+            if (!bytecode_value_from_mir_value(context,
+                                               instruction->as.hetero_array_new.elements[i],
+                                               &lowered->as.hetero_array_new.elements[i])) {
+                return false;
+            }
+            lowered->as.hetero_array_new.element_tags[i] =
+                checked_type_to_runtime_tag(instruction->as.hetero_array_new.element_types[i]);
+        }
+        return true;
+
+    case MIR_INSTR_UNION_NEW:
+        lowered->kind = BYTECODE_INSTR_UNION_NEW;
+        lowered->as.union_new.dest_temp = instruction->as.union_new.dest_temp;
+        lowered->as.union_new.type_desc_index = 0; /* TODO: register type descriptors */
+        lowered->as.union_new.variant_tag = (uint32_t)instruction->as.union_new.variant_index;
+        if (instruction->as.union_new.has_payload) {
+            if (!bytecode_value_from_mir_value(context,
+                                               instruction->as.union_new.payload,
+                                               &lowered->as.union_new.payload)) {
+                return false;
+            }
+        } else {
+            size_t zero_index = intern_literal_constant(context,
+                                                        AST_LITERAL_INTEGER,
+                                                        "0",
+                                                        false);
+            if (zero_index == (size_t)-1) {
+                return false;
+            }
+            lowered->as.union_new.payload.kind = BYTECODE_VALUE_CONSTANT;
+            lowered->as.union_new.payload.as.constant_index = zero_index;
+        }
+        return true;
     }
 
     return false;

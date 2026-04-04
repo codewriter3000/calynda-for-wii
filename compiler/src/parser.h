@@ -18,6 +18,7 @@ typedef struct {
     size_t      token_count;
     size_t      token_capacity;
     size_t      current;
+    bool        pending_gt;
     ParserError error;
     bool        has_error;
 } Parser;

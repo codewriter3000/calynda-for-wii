@@ -80,6 +80,10 @@ const char *calynda_rt_object_kind_name(CalyndaRtObjectKind kind) {
         return "package";
     case CALYNDA_RT_OBJECT_EXTERN_CALLABLE:
         return "extern-callable";
+    case CALYNDA_RT_OBJECT_UNION:
+        return "union";
+    case CALYNDA_RT_OBJECT_HETERO_ARRAY:
+        return "hetero-array";
     }
 
     return "unknown";
@@ -105,6 +109,10 @@ const char *calynda_rt_type_tag_name(CalyndaRtTypeTag tag) {
         return "external";
     case CALYNDA_RT_TYPE_RAW_WORD:
         return "raw-word";
+    case CALYNDA_RT_TYPE_UNION:
+        return "union";
+    case CALYNDA_RT_TYPE_HETERO_ARRAY:
+        return "hetero-array";
     }
 
     return "unknown";
@@ -125,6 +133,9 @@ bool calynda_rt_dump_layout(FILE *out) {
             "  ExternCallable size=%zu payload=[kind:uint32, name:char*]\n"
             "  TemplatePart size=%zu payload=[tag:uint64, payload:uint64]\n"
             "  TemplateTags text=%d value=%d\n"
+            "  Union size=%zu payload=[type_desc:TypeDescriptor*, tag:uint32, payload:uint64]\n"
+            "  HeteroArray size=%zu payload=[count:size_t, elements:uint64*, element_tags:uint32*]\n"
+            "  TypeDescriptor fields=[name:char*, generic_param_count:size_t, variant_count:size_t, variant_names:char**, variant_payload_tags:uint32*]\n"
             "  Builtins package=stdlib member=print\n",
             sizeof(CalyndaRtWord),
             CALYNDA_RT_OBJECT_MAGIC,
@@ -135,7 +146,9 @@ bool calynda_rt_dump_layout(FILE *out) {
             sizeof(CalyndaRtExternCallable),
             sizeof(CalyndaRtTemplatePart),
             CALYNDA_RT_TEMPLATE_TAG_TEXT,
-            CALYNDA_RT_TEMPLATE_TAG_VALUE);
+            CALYNDA_RT_TEMPLATE_TAG_VALUE,
+            sizeof(CalyndaRtUnion),
+            sizeof(CalyndaRtHeteroArray));
     return !ferror(out);
 }
 
@@ -479,6 +492,8 @@ CalyndaRtWord __calynda_rt_cast_value(CalyndaRtWord source,
     case CALYNDA_RT_TYPE_EXTERNAL:
     case CALYNDA_RT_TYPE_RAW_WORD:
     case CALYNDA_RT_TYPE_VOID:
+    case CALYNDA_RT_TYPE_UNION:
+    case CALYNDA_RT_TYPE_HETERO_ARRAY:
         return source;
     }
 
@@ -717,6 +732,21 @@ static bool format_word_internal(CalyndaRtWord word, char *buffer, size_t buffer
                         buffer_size,
                         "<extern:%s>",
                         ((const CalyndaRtExternCallable *)(const void *)header)->name) >= 0;
+    case CALYNDA_RT_OBJECT_UNION: {
+        const CalyndaRtUnion *u = (const CalyndaRtUnion *)(const void *)header;
+        const char *variant_name = "?";
+        if (u->type_desc && u->tag < u->type_desc->variant_count) {
+            variant_name = u->type_desc->variant_names[u->tag];
+        }
+        return snprintf(buffer, buffer_size, "<%s::%s>",
+                        u->type_desc ? u->type_desc->name : "union",
+                        variant_name) >= 0;
+    }
+    case CALYNDA_RT_OBJECT_HETERO_ARRAY:
+        return snprintf(buffer,
+                        buffer_size,
+                        "<hetero-array:%zu>",
+                        ((const CalyndaRtHeteroArray *)(const void *)header)->count) >= 0;
     }
 
     return false;
@@ -766,4 +796,123 @@ static CalyndaRtWord dispatch_extern_callable(const CalyndaRtExternCallable *cal
             "runtime: unsupported extern callable %s\n",
             extern_callable_name(callable->kind));
     abort();
+}
+
+CalyndaRtWord __calynda_rt_union_new(const CalyndaRtTypeDescriptor *type_desc,
+                                     uint32_t variant_tag,
+                                     CalyndaRtWord payload) {
+    CalyndaRtUnion *union_object;
+
+    union_object = calloc(1, sizeof(*union_object));
+    if (!union_object) {
+        fprintf(stderr, "runtime: out of memory while creating union value\n");
+        abort();
+    }
+
+    union_object->header.magic = CALYNDA_RT_OBJECT_MAGIC;
+    union_object->header.kind = CALYNDA_RT_OBJECT_UNION;
+    union_object->type_desc = type_desc;
+    union_object->tag = variant_tag;
+    union_object->payload = payload;
+    if (!register_object_pointer(union_object)) {
+        free(union_object);
+        fprintf(stderr, "runtime: out of memory while registering union object\n");
+        abort();
+    }
+
+    return make_object_word(union_object);
+}
+
+uint32_t __calynda_rt_union_get_tag(CalyndaRtWord value) {
+    const CalyndaRtObjectHeader *header = calynda_rt_as_object(value);
+
+    if (!header || header->kind != CALYNDA_RT_OBJECT_UNION) {
+        fprintf(stderr, "runtime: attempted tag access on non-union value\n");
+        abort();
+    }
+
+    return ((const CalyndaRtUnion *)(const void *)header)->tag;
+}
+
+CalyndaRtWord __calynda_rt_union_get_payload(CalyndaRtWord value) {
+    const CalyndaRtObjectHeader *header = calynda_rt_as_object(value);
+
+    if (!header || header->kind != CALYNDA_RT_OBJECT_UNION) {
+        fprintf(stderr, "runtime: attempted payload access on non-union value\n");
+        abort();
+    }
+
+    return ((const CalyndaRtUnion *)(const void *)header)->payload;
+}
+
+bool __calynda_rt_union_check_tag(CalyndaRtWord value, uint32_t expected_tag) {
+    const CalyndaRtObjectHeader *header = calynda_rt_as_object(value);
+
+    if (!header || header->kind != CALYNDA_RT_OBJECT_UNION) {
+        return false;
+    }
+
+    return ((const CalyndaRtUnion *)(const void *)header)->tag == expected_tag;
+}
+
+CalyndaRtWord __calynda_rt_hetero_array_new(size_t element_count,
+                                            const CalyndaRtWord *elements,
+                                            const CalyndaRtTypeTag *element_tags) {
+    CalyndaRtHeteroArray *array_object;
+
+    array_object = calloc(1, sizeof(*array_object));
+    if (!array_object) {
+        fprintf(stderr, "runtime: out of memory while creating hetero array\n");
+        abort();
+    }
+
+    array_object->header.magic = CALYNDA_RT_OBJECT_MAGIC;
+    array_object->header.kind = CALYNDA_RT_OBJECT_HETERO_ARRAY;
+    array_object->count = element_count;
+    if (element_count > 0) {
+        array_object->elements = calloc(element_count, sizeof(*array_object->elements));
+        array_object->element_tags = calloc(element_count, sizeof(*array_object->element_tags));
+        if (!array_object->elements || !array_object->element_tags) {
+            free(array_object->elements);
+            free(array_object->element_tags);
+            free(array_object);
+            fprintf(stderr, "runtime: out of memory while creating hetero array elements\n");
+            abort();
+        }
+        if (elements) {
+            memcpy(array_object->elements, elements, element_count * sizeof(*elements));
+        }
+        if (element_tags) {
+            memcpy(array_object->element_tags, element_tags, element_count * sizeof(*element_tags));
+        }
+    }
+    if (!register_object_pointer(array_object)) {
+        free(array_object->elements);
+        free(array_object->element_tags);
+        free(array_object);
+        fprintf(stderr, "runtime: out of memory while registering hetero array\n");
+        abort();
+    }
+
+    return make_object_word(array_object);
+}
+
+CalyndaRtTypeTag __calynda_rt_hetero_array_get_tag(CalyndaRtWord target, CalyndaRtWord index) {
+    const CalyndaRtObjectHeader *header = calynda_rt_as_object(target);
+    const CalyndaRtHeteroArray *arr;
+    size_t offset;
+
+    if (!header || header->kind != CALYNDA_RT_OBJECT_HETERO_ARRAY) {
+        fprintf(stderr, "runtime: attempted hetero-array tag access on non-hetero-array value\n");
+        abort();
+    }
+
+    arr = (const CalyndaRtHeteroArray *)(const void *)header;
+    offset = (size_t)(int64_t)index;
+    if (offset >= arr->count) {
+        fprintf(stderr, "runtime: hetero-array tag index out of bounds (%zu)\n", offset);
+        abort();
+    }
+
+    return arr->element_tags[offset];
 }

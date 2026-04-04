@@ -41,7 +41,8 @@ typedef enum {
 typedef enum {
     AST_TYPE_VOID = 0,
     AST_TYPE_PRIMITIVE,
-    AST_TYPE_ARR
+    AST_TYPE_ARR,
+    AST_TYPE_NAMED
 } AstTypeKind;
 
 typedef struct {
@@ -72,6 +73,7 @@ typedef struct {
 struct AstType {
     AstTypeKind       kind;
     AstPrimitiveType  primitive;
+    char             *name;              /* for AST_TYPE_NAMED */
     AstArrayDimension *dimensions;
     size_t            dimension_count;
     size_t            dimension_capacity;
@@ -323,6 +325,7 @@ struct AstExpression {
 
 typedef struct {
     bool          is_final;
+    bool          is_internal;
     bool          is_inferred_type;
     AstType       declared_type;
     char          *name;
@@ -450,6 +453,7 @@ bool ast_qualified_name_append(AstQualifiedName *name, const char *segment);
 void ast_type_init_void(AstType *type);
 void ast_type_init_primitive(AstType *type, AstPrimitiveType primitive);
 void ast_type_init_arr(AstType *type);
+void ast_type_init_named(AstType *type, const char *name);
 void ast_type_free(AstType *type);
 bool ast_type_add_dimension(AstType *type, bool has_size, const char *size_literal);
 bool ast_type_add_generic_arg(AstType *type, AstGenericArg *arg);
@@ -476,6 +480,9 @@ void ast_statement_free(AstStatement *statement);
 AstTopLevelDecl *ast_top_level_decl_new(AstTopLevelDeclKind kind);
 void ast_top_level_decl_free(AstTopLevelDecl *decl);
 bool ast_binding_decl_add_modifier(AstBindingDecl *decl, AstModifier modifier);
+bool ast_union_decl_add_modifier(AstUnionDecl *decl, AstModifier modifier);
+bool ast_decl_has_modifier(const AstModifier *modifiers, size_t count,
+                           AstModifier modifier);
 
 void ast_program_init(AstProgram *program);
 void ast_program_free(AstProgram *program);

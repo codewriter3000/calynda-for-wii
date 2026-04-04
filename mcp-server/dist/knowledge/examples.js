@@ -171,10 +171,25 @@ short s = 256;`,
     },
     {
         name: 'tagged-union',
-        description: 'Tagged union declaration with generic parameters',
+        description: 'Tagged union declaration with generic parameters and variant construction',
         tags: ['union', 'generics', 'v2'],
         code: `union Option<T> { Some(T), None };
-union Result<T, E> { Ok(T), Err(E) };`,
+union Result<T, E> { Ok(T), Err(E) };
+union Direction { North, South, East, West };
+
+start(string[] args) -> {
+  Option<int32> x = Option.Some(42);
+  Option<int32> nothing = Option.None;
+  Direction d = Direction.North;
+};`,
+    },
+    {
+        name: 'heterogeneous-array',
+        description: 'Heterogeneous array with arr<?> type annotation',
+        tags: ['array', 'generics', 'v2'],
+        code: `start(string[] args) -> {
+  arr<?> mixed = [1, "hello", true];
+};`,
     },
 ];
 //# sourceMappingURL=examples.js.map

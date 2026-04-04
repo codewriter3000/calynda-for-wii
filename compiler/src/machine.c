@@ -611,6 +611,9 @@ static size_t compute_helper_slot_count(const LirUnit *lir_unit,
                 case CODEGEN_RUNTIME_ARRAY_LITERAL:
                     needed = instruction->as.array_literal.element_count;
                     break;
+                case CODEGEN_RUNTIME_HETERO_ARRAY_NEW:
+                    needed = instruction->as.hetero_array_new.element_count * 2;
+                    break;
                 case CODEGEN_RUNTIME_TEMPLATE_BUILD:
                     needed = instruction->as.template_literal.part_count * 2;
                     break;
@@ -620,6 +623,10 @@ static size_t compute_helper_slot_count(const LirUnit *lir_unit,
                 case CODEGEN_RUNTIME_STORE_MEMBER:
                 case CODEGEN_RUNTIME_THROW:
                 case CODEGEN_RUNTIME_CAST_VALUE:
+                case CODEGEN_RUNTIME_UNION_NEW:
+                case CODEGEN_RUNTIME_UNION_GET_TAG:
+                case CODEGEN_RUNTIME_UNION_GET_PAYLOAD:
+                case CODEGEN_RUNTIME_HETERO_ARRAY_GET_TAG:
                     needed = 0;
                     break;
                 }
@@ -1196,7 +1203,11 @@ static bool emit_unary(MachineBuildContext *context,
              append_line(context, block, "sete %s", work_reg);
         break;
     case AST_UNARY_OP_PRE_INCREMENT:
+        ok = append_line(context, block, "inc %s", work_reg);
+        break;
     case AST_UNARY_OP_PRE_DECREMENT:
+        ok = append_line(context, block, "dec %s", work_reg);
+        break;
     case AST_UNARY_OP_DEREF:
     case AST_UNARY_OP_ADDRESS_OF:
         break;
@@ -1757,6 +1768,93 @@ static bool emit_instruction(MachineBuildContext *context,
         free(value);
         return ok;
     }
+    case CODEGEN_RUNTIME_UNION_NEW: {
+        const RuntimeAbiHelperSignature *signature =
+            runtime_abi_get_helper_signature(context->program->target,
+                                             selected->selection.as.runtime_helper);
+        bool ok;
+
+        /* RDI = type descriptor (NULL for now) */
+        ok = append_line(context, block, "xor rdi, rdi");
+        /* RSI = variant tag */
+        ok = ok && append_line(context, block, "mov rsi, %zu",
+                               instruction->as.union_new.variant_index);
+        /* RDX = payload value (0 if no payload) */
+        if (instruction->as.union_new.has_payload) {
+            char *payload_str = NULL;
+            ok = ok && format_operand(lir_unit, codegen_unit,
+                                      instruction->as.union_new.payload, &payload_str);
+            ok = ok && append_line(context, block, "mov rdx, %s", payload_str);
+            free(payload_str);
+        } else {
+            ok = ok && append_line(context, block, "xor edx, edx");
+        }
+        ok = ok && emit_runtime_helper_call(context, codegen_unit, signature, block, false) &&
+             emit_store_vreg(context,
+                             codegen_unit,
+                             instruction->as.union_new.dest_vreg,
+                             block,
+                             "rax");
+        return ok;
+    }
+    case CODEGEN_RUNTIME_UNION_GET_TAG:
+    case CODEGEN_RUNTIME_UNION_GET_PAYLOAD:
+    case CODEGEN_RUNTIME_HETERO_ARRAY_GET_TAG:
+        /* These helpers are not yet reachable from the pipeline. */
+        machine_set_error(context,
+                          (AstSourceSpan){0},
+                          NULL,
+                          "Union/hetero get-tag/get-payload helpers not yet wired through machine emit.");
+        return false;
+
+    case CODEGEN_RUNTIME_HETERO_ARRAY_NEW: {
+        const RuntimeAbiHelperSignature *signature =
+            runtime_abi_get_helper_signature(context->program->target,
+                                             selected->selection.as.runtime_helper);
+        size_t count = instruction->as.hetero_array_new.element_count;
+        size_t i;
+        bool ok = true;
+
+        /* Stage element values into helper slots 0..N-1 */
+        for (i = 0; i < count; i++) {
+            char *slot = NULL;
+            char *value = NULL;
+
+            ok = format_helper_slot_operand(i, &slot) &&
+                 format_operand(lir_unit, codegen_unit,
+                                instruction->as.hetero_array_new.elements[i], &value) &&
+                 emit_move_to_destination(context, block, slot, value);
+            free(slot);
+            free(value);
+            if (!ok) return false;
+        }
+        /* Stage per-element type tags into helper slots N..2N-1 */
+        for (i = 0; i < count; i++) {
+            char *slot = NULL;
+            char tag[64];
+
+            ok = format_helper_slot_operand(count + i, &slot) &&
+                 runtime_abi_format_type_tag(instruction->as.hetero_array_new.element_types[i],
+                                             tag, sizeof(tag)) &&
+                 emit_move_to_destination(context, block, slot, tag);
+            free(slot);
+            if (!ok) return false;
+        }
+        ok = append_line(context, block, "mov rdi, %zu", count) &&
+             (count > 0
+                  ? append_line(context, block, "lea rsi, helper(0)")
+                  : append_line(context, block, "mov rsi, null")) &&
+             (count > 0
+                  ? append_line(context, block, "lea rdx, helper(%zu)", count)
+                  : append_line(context, block, "mov rdx, null")) &&
+             emit_runtime_helper_call(context, codegen_unit, signature, block, false) &&
+             emit_store_vreg(context,
+                             codegen_unit,
+                             instruction->as.hetero_array_new.dest_vreg,
+                             block,
+                             "rax");
+        return ok;
+    }
     case CODEGEN_RUNTIME_THROW:
         machine_set_error(context,
                           (AstSourceSpan){0},
@@ -1895,6 +1993,8 @@ static bool build_unit(MachineBuildContext *context,
     machine_unit->kind = lir_unit->kind;
     machine_unit->name = ast_copy_text(lir_unit->name);
     machine_unit->return_type = lir_unit->return_type;
+    machine_unit->is_exported = lir_unit->symbol && lir_unit->symbol->is_exported;
+    machine_unit->is_static = lir_unit->symbol && lir_unit->symbol->is_static;
     machine_unit->parameter_count = lir_unit->parameter_count;
     machine_unit->frame_slot_count = codegen_unit->frame_slot_count;
     machine_unit->spill_slot_count = codegen_unit->spill_slot_count;

@@ -13,13 +13,17 @@ typedef enum {
     CHECKED_TYPE_VOID,
     CHECKED_TYPE_NULL,
     CHECKED_TYPE_VALUE,
-    CHECKED_TYPE_EXTERNAL
+    CHECKED_TYPE_EXTERNAL,
+    CHECKED_TYPE_NAMED,
+    CHECKED_TYPE_TYPE_PARAM
 } CheckedTypeKind;
 
 typedef struct {
     CheckedTypeKind  kind;
     AstPrimitiveType primitive;
     size_t           array_depth;
+    const char      *name;             /* for CHECKED_TYPE_NAMED / TYPE_PARAM */
+    size_t           generic_arg_count; /* for CHECKED_TYPE_NAMED */
 } CheckedType;
 
 typedef struct {

@@ -126,6 +126,61 @@ static const RuntimeAbiHelperSignature X86_64_SYSV_HELPERS[] = {
         },
         2,
         RUNTIME_ABI_PACK_NONE
+    },
+    {
+        CODEGEN_RUNTIME_UNION_NEW,
+        "__calynda_rt_union_new",
+        RUNTIME_ABI_RETURN_VALUE,
+        {
+            { RUNTIME_ABI_ARG_TYPE_DESCRIPTOR, CODEGEN_REG_RDI },
+            { RUNTIME_ABI_ARG_VARIANT_TAG, CODEGEN_REG_RSI },
+            { RUNTIME_ABI_ARG_PAYLOAD_VALUE, CODEGEN_REG_RDX }
+        },
+        3,
+        RUNTIME_ABI_PACK_NONE
+    },
+    {
+        CODEGEN_RUNTIME_UNION_GET_TAG,
+        "__calynda_rt_union_get_tag",
+        RUNTIME_ABI_RETURN_VALUE,
+        {
+            { RUNTIME_ABI_ARG_TARGET_VALUE, CODEGEN_REG_RDI }
+        },
+        1,
+        RUNTIME_ABI_PACK_NONE
+    },
+    {
+        CODEGEN_RUNTIME_UNION_GET_PAYLOAD,
+        "__calynda_rt_union_get_payload",
+        RUNTIME_ABI_RETURN_VALUE,
+        {
+            { RUNTIME_ABI_ARG_TARGET_VALUE, CODEGEN_REG_RDI }
+        },
+        1,
+        RUNTIME_ABI_PACK_NONE
+    },
+    {
+        CODEGEN_RUNTIME_HETERO_ARRAY_NEW,
+        "__calynda_rt_hetero_array_new",
+        RUNTIME_ABI_RETURN_VALUE,
+        {
+            { RUNTIME_ABI_ARG_ELEMENT_COUNT, CODEGEN_REG_RDI },
+            { RUNTIME_ABI_ARG_ELEMENT_PACK, CODEGEN_REG_RSI },
+            { RUNTIME_ABI_ARG_ELEMENT_TAG_PACK, CODEGEN_REG_RDX }
+        },
+        3,
+        RUNTIME_ABI_PACK_VALUE_WORDS
+    },
+    {
+        CODEGEN_RUNTIME_HETERO_ARRAY_GET_TAG,
+        "__calynda_rt_hetero_array_get_tag",
+        RUNTIME_ABI_RETURN_VALUE,
+        {
+            { RUNTIME_ABI_ARG_TARGET_VALUE, CODEGEN_REG_RDI },
+            { RUNTIME_ABI_ARG_INDEX_VALUE, CODEGEN_REG_RSI }
+        },
+        2,
+        RUNTIME_ABI_PACK_NONE
     }
 };
 
@@ -194,6 +249,16 @@ const char *runtime_abi_argument_role_name(RuntimeAbiArgumentRole role) {
         return "source_value";
     case RUNTIME_ABI_ARG_TARGET_TYPE_TAG:
         return "target_type_tag";
+    case RUNTIME_ABI_ARG_TYPE_DESCRIPTOR:
+        return "type_descriptor";
+    case RUNTIME_ABI_ARG_VARIANT_TAG:
+        return "variant_tag";
+    case RUNTIME_ABI_ARG_PAYLOAD_VALUE:
+        return "payload_value";
+    case RUNTIME_ABI_ARG_EXPECTED_TAG:
+        return "expected_tag";
+    case RUNTIME_ABI_ARG_ELEMENT_TAG_PACK:
+        return "element_tag_pack";
     }
 
     return "unknown";

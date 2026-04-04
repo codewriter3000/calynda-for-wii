@@ -77,6 +77,11 @@ The initial opcode set mirrors the current MIR surface:
 - `BC_STORE_GLOBAL`
 - `BC_STORE_INDEX`
 - `BC_STORE_MEMBER`
+- `BC_UNION_NEW`
+- `BC_UNION_GET_TAG`
+- `BC_UNION_GET_PAYLOAD`
+- `BC_HETERO_ARRAY_NEW`
+- `BC_HETERO_ARRAY_GET_TAG`
 
 Terminator opcodes are:
 

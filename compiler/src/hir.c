@@ -100,6 +100,17 @@ void hir_program_free(HirProgram *program) {
             if (decl->as.binding.initializer) {
                 hir_expression_free(decl->as.binding.initializer);
             }
+        } else if (decl->kind == HIR_TOP_LEVEL_UNION) {
+            size_t v;
+            for (v = 0; v < decl->as.union_decl.generic_param_count; v++) {
+                free(decl->as.union_decl.generic_params[v]);
+            }
+            free(decl->as.union_decl.generic_params);
+            for (v = 0; v < decl->as.union_decl.variant_count; v++) {
+                free(decl->as.union_decl.variants[v].name);
+            }
+            free(decl->as.union_decl.variants);
+            free(decl->as.union_decl.name);
         } else {
             free_parameter_list(&decl->as.start.parameters);
             if (decl->as.start.body) {
@@ -294,6 +305,14 @@ void hir_expression_free(HirExpression *expression) {
         break;
     case HIR_EXPR_ARRAY_LITERAL:
         free_array_literal_expression(&expression->as.array_literal);
+        break;
+    case HIR_EXPR_DISCARD:
+        break;
+    case HIR_EXPR_POST_INCREMENT:
+        hir_expression_free(expression->as.post_increment.operand);
+        break;
+    case HIR_EXPR_POST_DECREMENT:
+        hir_expression_free(expression->as.post_decrement.operand);
         break;
     }
 
@@ -700,6 +719,7 @@ static bool lower_parameters(HirBuildContext *context,
         }
         parameter.symbol = symbol;
         parameter.type = info->type;
+        parameter.is_varargs = parameters->items[i].is_varargs;
         parameter.source_span = parameters->items[i].name_span;
 
         if (!append_parameter(out, parameter)) {
@@ -993,6 +1013,15 @@ static HirExpression *lower_expression(HirBuildContext *context,
     case AST_EXPR_ARRAY_LITERAL:
         hir_expression = hir_expression_new(HIR_EXPR_ARRAY_LITERAL);
         break;
+    case AST_EXPR_DISCARD:
+        hir_expression = hir_expression_new(HIR_EXPR_DISCARD);
+        break;
+    case AST_EXPR_POST_INCREMENT:
+        hir_expression = hir_expression_new(HIR_EXPR_POST_INCREMENT);
+        break;
+    case AST_EXPR_POST_DECREMENT:
+        hir_expression = hir_expression_new(HIR_EXPR_POST_DECREMENT);
+        break;
     case AST_EXPR_GROUPING:
     default:
         hir_expression = NULL;
@@ -1239,6 +1268,20 @@ static HirExpression *lower_expression(HirBuildContext *context,
         }
         return hir_expression;
 
+    case AST_EXPR_DISCARD:
+        /* leaf node — nothing to lower */
+        break;
+
+    case AST_EXPR_POST_INCREMENT:
+        hir_expression->as.post_increment.operand =
+            lower_expression(context, expression->as.post_increment.operand);
+        break;
+
+    case AST_EXPR_POST_DECREMENT:
+        hir_expression->as.post_decrement.operand =
+            lower_expression(context, expression->as.post_decrement.operand);
+        break;
+
     case AST_EXPR_GROUPING:
     default:
         hir_expression_free(hir_expression);
@@ -1256,7 +1299,11 @@ static HirExpression *lower_expression(HirBuildContext *context,
         (expression->kind == AST_EXPR_UNARY && !hir_expression->as.unary.operand) ||
         (expression->kind == AST_EXPR_INDEX &&
          (!hir_expression->as.index.target || !hir_expression->as.index.index)) ||
-        (expression->kind == AST_EXPR_CAST && !hir_expression->as.cast.expression)) {
+        (expression->kind == AST_EXPR_CAST && !hir_expression->as.cast.expression) ||
+        (expression->kind == AST_EXPR_POST_INCREMENT &&
+         !hir_expression->as.post_increment.operand) ||
+        (expression->kind == AST_EXPR_POST_DECREMENT &&
+         !hir_expression->as.post_decrement.operand)) {
         hir_expression_free(hir_expression);
         return NULL;
     }
@@ -1354,8 +1401,94 @@ bool hir_build_program(HirProgram *program,
         const AstTopLevelDecl *ast_decl = ast_program->top_level_decls[i];
         HirTopLevelDecl *hir_decl;
 
-        /* Skip union declarations for now — not yet lowered to HIR */
+        /* Lower union declarations into HIR type metadata */
         if (ast_decl->kind == AST_TOP_LEVEL_UNION) {
+            const AstUnionDecl *udecl = &ast_decl->as.union_decl;
+            const Scope *root_scope = symbol_table_root_scope(symbols);
+            const Symbol *symbol;
+            size_t v;
+
+            symbol = scope_lookup_local(root_scope, udecl->name);
+
+            hir_decl = hir_top_level_decl_new(HIR_TOP_LEVEL_UNION);
+            if (!hir_decl) {
+                hir_set_error(&context,
+                              udecl->name_span,
+                              NULL,
+                              "Out of memory while lowering HIR union declaration.");
+                return false;
+            }
+
+            hir_decl->as.union_decl.name = ast_copy_text(udecl->name);
+            hir_decl->as.union_decl.symbol = symbol;
+            hir_decl->as.union_decl.source_span = udecl->name_span;
+            hir_decl->as.union_decl.is_exported = false;
+            hir_decl->as.union_decl.is_static = false;
+            hir_decl->as.union_decl.generic_param_count = udecl->generic_param_count;
+            hir_decl->as.union_decl.generic_params = NULL;
+            hir_decl->as.union_decl.variant_count = udecl->variant_count;
+            hir_decl->as.union_decl.variants = NULL;
+
+            if (symbol) {
+                hir_decl->as.union_decl.is_exported = symbol->is_exported;
+                hir_decl->as.union_decl.is_static = symbol->is_static;
+            }
+
+            if (udecl->generic_param_count > 0) {
+                hir_decl->as.union_decl.generic_params = calloc(udecl->generic_param_count,
+                                                                sizeof(char *));
+                if (!hir_decl->as.union_decl.generic_params) {
+                    free(hir_decl->as.union_decl.name);
+                    free(hir_decl);
+                    hir_set_error(&context, udecl->name_span, NULL,
+                                  "Out of memory while lowering union generic params.");
+                    return false;
+                }
+                for (v = 0; v < udecl->generic_param_count; v++) {
+                    hir_decl->as.union_decl.generic_params[v] = ast_copy_text(udecl->generic_params[v]);
+                }
+            }
+
+            if (udecl->variant_count > 0) {
+                hir_decl->as.union_decl.variants = calloc(udecl->variant_count,
+                                                          sizeof(HirUnionVariant));
+                if (!hir_decl->as.union_decl.variants) {
+                    free(hir_decl->as.union_decl.generic_params);
+                    free(hir_decl->as.union_decl.name);
+                    free(hir_decl);
+                    hir_set_error(&context, udecl->name_span, NULL,
+                                  "Out of memory while lowering union variants.");
+                    return false;
+                }
+                for (v = 0; v < udecl->variant_count; v++) {
+                    hir_decl->as.union_decl.variants[v].name =
+                        ast_copy_text(udecl->variants[v].name);
+                    hir_decl->as.union_decl.variants[v].has_payload =
+                        udecl->variants[v].payload_type != NULL;
+                    if (udecl->variants[v].payload_type) {
+                        const TypeCheckInfo *tc_info = type_checker_get_symbol_info(checker, symbol);
+                        hir_decl->as.union_decl.variants[v].payload_type =
+                            tc_info ? tc_info->type : (CheckedType){0};
+                    } else {
+                        memset(&hir_decl->as.union_decl.variants[v].payload_type, 0,
+                               sizeof(CheckedType));
+                    }
+                }
+            }
+
+            if (!hir_decl->as.union_decl.name) {
+                free(hir_decl);
+                hir_set_error(&context, udecl->name_span, NULL,
+                              "Out of memory while lowering union name.");
+                return false;
+            }
+
+            if (!append_top_level_decl(program, hir_decl)) {
+                free(hir_decl);
+                hir_set_error(&context, udecl->name_span, NULL,
+                              "Out of memory while adding union to HIR program.");
+                return false;
+            }
             continue;
         }
 
@@ -1397,6 +1530,9 @@ bool hir_build_program(HirProgram *program,
             hir_decl->as.binding.symbol = symbol;
             hir_decl->as.binding.type = info->type;
             hir_decl->as.binding.is_final = symbol->is_final;
+            hir_decl->as.binding.is_exported = symbol->is_exported;
+            hir_decl->as.binding.is_static = symbol->is_static;
+            hir_decl->as.binding.is_internal = symbol->is_internal;
             hir_decl->as.binding.is_callable = info->is_callable;
             hir_decl->as.binding.source_span = ast_decl->as.binding_decl.name_span;
             if (info->is_callable &&

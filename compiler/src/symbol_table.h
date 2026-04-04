@@ -11,14 +11,18 @@ typedef enum {
     SYMBOL_KIND_IMPORT,
     SYMBOL_KIND_TOP_LEVEL_BINDING,
     SYMBOL_KIND_PARAMETER,
-    SYMBOL_KIND_LOCAL
+    SYMBOL_KIND_LOCAL,
+    SYMBOL_KIND_UNION,
+    SYMBOL_KIND_TYPE_PARAMETER,
+    SYMBOL_KIND_VARIANT
 } SymbolKind;
 
 typedef enum {
     SCOPE_KIND_PROGRAM = 0,
     SCOPE_KIND_START,
     SCOPE_KIND_LAMBDA,
-    SCOPE_KIND_BLOCK
+    SCOPE_KIND_BLOCK,
+    SCOPE_KIND_UNION
 } ScopeKind;
 
 typedef struct Scope Scope;
@@ -31,9 +35,17 @@ struct Symbol {
     const AstType  *declared_type;
     bool            is_inferred_type;
     bool            is_final;
+    bool            is_exported;
+    bool            is_static;
+    bool            is_internal;
+    size_t          generic_param_count;
     AstSourceSpan   declaration_span;
     const void     *declaration;
     Scope          *scope;
+    /* SYMBOL_KIND_VARIANT fields */
+    size_t          variant_index;
+    bool            variant_has_payload;
+    const AstType  *variant_payload_type;
 };
 
 struct Scope {
@@ -115,5 +127,7 @@ const Symbol *symbol_table_lookup(const SymbolTable *table,
                                   const char *name);
 const Symbol *symbol_table_resolve_identifier(const SymbolTable *table,
                                               const AstExpression *identifier);
+const SymbolResolution *symbol_table_find_resolution(const SymbolTable *table,
+                                                     const AstExpression *identifier);
 
 #endif /* CALYNDA_SYMBOL_TABLE_H */

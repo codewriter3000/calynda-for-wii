@@ -243,6 +243,32 @@ bool lir_dump_program(FILE *out, const LirProgram *program) {
                         return false;
                     }
                     break;
+                case LIR_INSTR_HETERO_ARRAY_NEW:
+                    fprintf(out, "v%zu = hetero_array_new [",
+                            instruction->as.hetero_array_new.dest_vreg);
+                    for (size_t ei = 0; ei < instruction->as.hetero_array_new.element_count; ei++) {
+                        if (ei > 0 && fputs(", ", out) == EOF) {
+                            return false;
+                        }
+                        if (!dump_operand(out, unit, instruction->as.hetero_array_new.elements[ei])) {
+                            return false;
+                        }
+                    }
+                    fputc(']', out);
+                    break;
+                case LIR_INSTR_UNION_NEW:
+                    fprintf(out, "v%zu = union_new %s variant %zu",
+                            instruction->as.union_new.dest_vreg,
+                            instruction->as.union_new.union_name ?
+                                instruction->as.union_new.union_name : "?",
+                            instruction->as.union_new.variant_index);
+                    if (instruction->as.union_new.has_payload) {
+                        fputs(" payload ", out);
+                        if (!dump_operand(out, unit, instruction->as.union_new.payload)) {
+                            return false;
+                        }
+                    }
+                    break;
                 }
                 fputc('\n', out);
             }

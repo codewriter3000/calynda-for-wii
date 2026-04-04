@@ -235,6 +235,8 @@ static const char *scope_kind_label(ScopeKind kind) {
         return "lambda";
     case SCOPE_KIND_BLOCK:
         return "block";
+    case SCOPE_KIND_UNION:
+        return "union";
     }
 
     return "unknown";
@@ -280,6 +282,33 @@ static bool append_ast_type(SemanticDumpBuilder *builder,
         if (!builder_append(builder, "arr")) {
             return false;
         }
+        if (type->generic_args.count > 0) {
+            if (!builder_append(builder, "<")) {
+                return false;
+            }
+            for (i = 0; i < type->generic_args.count; i++) {
+                if (i > 0 && !builder_append(builder, ", ")) {
+                    return false;
+                }
+                if (type->generic_args.items[i].kind == AST_GENERIC_ARG_WILDCARD) {
+                    if (!builder_append(builder, "?")) {
+                        return false;
+                    }
+                } else if (type->generic_args.items[i].type) {
+                    if (!append_ast_type(builder, type->generic_args.items[i].type, false)) {
+                        return false;
+                    }
+                }
+            }
+            if (!builder_append(builder, ">")) {
+                return false;
+            }
+        }
+        break;
+    case AST_TYPE_NAMED:
+        if (!builder_append(builder, type->name ? type->name : "?")) {
+            return false;
+        }
         break;
     }
 
@@ -318,6 +347,29 @@ static bool append_checked_type(SemanticDumpBuilder *builder, CheckedType type) 
             }
         }
         return true;
+    case CHECKED_TYPE_NAMED:
+        if (!builder_append(builder, type.name ? type.name : "?")) {
+            return false;
+        }
+        if (type.generic_arg_count > 0) {
+            if (type.name && strcmp(type.name, "arr") == 0 && type.generic_arg_count == 1) {
+                if (!builder_append(builder, "<?>")) {
+                    return false;
+                }
+            } else {
+                if (!builder_appendf(builder, "<...%zu>", type.generic_arg_count)) {
+                    return false;
+                }
+            }
+        }
+        for (i = 0; i < type.array_depth; i++) {
+            if (!builder_append(builder, "[]")) {
+                return false;
+            }
+        }
+        return true;
+    case CHECKED_TYPE_TYPE_PARAM:
+        return builder_append(builder, type.name ? type.name : "?");
     }
 
     return false;
@@ -371,6 +423,11 @@ static bool append_callable_signature(SemanticDumpBuilder *builder,
             }
             if (!append_ast_type(builder, &info->parameters->items[i].type, false)) {
                 return false;
+            }
+            if (info->parameters->items[i].is_varargs) {
+                if (!builder_append(builder, "...")) {
+                    return false;
+                }
             }
         }
     }
@@ -678,6 +735,21 @@ static bool dump_symbols(SemanticDumpBuilder *builder,
         }
         if (!builder_appendf(builder, " final=%s", symbol->is_final ? "true" : "false")) {
             return false;
+        }
+        if (symbol->is_exported) {
+            if (!builder_append(builder, " exported=true")) {
+                return false;
+            }
+        }
+        if (symbol->is_static) {
+            if (!builder_append(builder, " static=true")) {
+                return false;
+            }
+        }
+        if (symbol->is_internal) {
+            if (!builder_append(builder, " internal=true")) {
+                return false;
+            }
         }
         if (source_span_is_valid(symbol->declaration_span)) {
             if (!builder_append(builder, " span=") ||

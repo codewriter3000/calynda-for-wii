@@ -1,4 +1,4 @@
-export type NodeKind = 'Program' | 'PackageDecl' | 'ImportDecl' | 'StartDecl' | 'BindingDecl' | 'Block' | 'LocalBindingStatement' | 'ReturnStatement' | 'ExitStatement' | 'ThrowStatement' | 'ExpressionStatement' | 'LambdaExpression' | 'AssignmentExpression' | 'TernaryExpression' | 'BinaryExpression' | 'UnaryExpression' | 'PostfixExpression' | 'CallExpression' | 'IndexExpression' | 'MemberExpression' | 'CastExpression' | 'ArrayLiteral' | 'Identifier' | 'IntegerLiteral' | 'FloatLiteral' | 'BoolLiteral' | 'CharLiteral' | 'StringLiteral' | 'TemplateLiteral' | 'NullLiteral' | 'Parameter' | 'ParameterList' | 'ArrayType' | 'PrimitiveType' | 'VoidType';
+export type NodeKind = 'Program' | 'PackageDecl' | 'ImportDecl' | 'StartDecl' | 'BindingDecl' | 'UnionDecl' | 'Block' | 'LocalBindingStatement' | 'ReturnStatement' | 'ExitStatement' | 'ThrowStatement' | 'ExpressionStatement' | 'LambdaExpression' | 'AssignmentExpression' | 'TernaryExpression' | 'BinaryExpression' | 'UnaryExpression' | 'PostfixExpression' | 'CallExpression' | 'IndexExpression' | 'MemberExpression' | 'CastExpression' | 'ArrayLiteral' | 'Identifier' | 'IntegerLiteral' | 'FloatLiteral' | 'BoolLiteral' | 'CharLiteral' | 'StringLiteral' | 'TemplateLiteral' | 'NullLiteral' | 'Parameter' | 'ParameterList' | 'ArrayType' | 'PrimitiveType' | 'NamedType' | 'VoidType';
 export interface Position {
     line: number;
     column: number;
@@ -23,7 +23,18 @@ export interface ImportDecl extends ASTNode {
     kind: 'ImportDecl';
     name: string;
 }
-export type TopLevelDecl = StartDecl | BindingDecl;
+export type TopLevelDecl = StartDecl | BindingDecl | UnionDecl;
+export interface UnionVariant {
+    name: string;
+    payloadType?: TypeNode;
+}
+export interface UnionDecl extends ASTNode {
+    kind: 'UnionDecl';
+    modifiers: string[];
+    name: string;
+    genericParams: string[];
+    variants: UnionVariant[];
+}
 export interface StartDecl extends ASTNode {
     kind: 'StartDecl';
     params: Parameter[];
@@ -36,7 +47,7 @@ export interface BindingDecl extends ASTNode {
     name: string;
     value: Expression;
 }
-export type TypeNode = PrimitiveTypeNode | ArrayTypeNode | VoidTypeNode;
+export type TypeNode = PrimitiveTypeNode | ArrayTypeNode | NamedTypeNode | VoidTypeNode;
 export interface PrimitiveTypeNode extends ASTNode {
     kind: 'PrimitiveType';
     name: string;
@@ -45,6 +56,11 @@ export interface ArrayTypeNode extends ASTNode {
     kind: 'ArrayType';
     elementType: TypeNode;
     size?: number;
+}
+export interface NamedTypeNode extends ASTNode {
+    kind: 'NamedType';
+    name: string;
+    genericArgs: TypeNode[];
 }
 export interface VoidTypeNode extends ASTNode {
     kind: 'VoidType';
