@@ -78,27 +78,34 @@ void c_emit_type(FILE *out, CheckedType type) {
 }
 
 void c_emit_type_str(char *buf, size_t bufsz, CheckedType type) {
-    FILE *f;
-    long  sz;
+    FILE  *f;
+    long   sz;
     size_t rsz;
+
+    if (!buf || bufsz == 0) {
+        return;
+    }
 
     f = tmpfile();
     if (!f) {
-        if (bufsz > 0) {
-            snprintf(buf, bufsz, "CalyndaRtWord");
-        }
+        snprintf(buf, bufsz, "CalyndaRtWord");
         return;
     }
     c_emit_type(f, type);
-    fflush(f);
-    fseek(f, 0, SEEK_END);
-    sz = ftell(f);
-    fseek(f, 0, SEEK_SET);
-    if (sz < 0 || (size_t)sz + 1 > bufsz) {
+    if (fflush(f) != 0 || fseek(f, 0, SEEK_END) != 0) {
         fclose(f);
-        if (bufsz > 0) {
-            snprintf(buf, bufsz, "CalyndaRtWord");
-        }
+        snprintf(buf, bufsz, "CalyndaRtWord");
+        return;
+    }
+    sz = ftell(f);
+    if (sz < 0 || fseek(f, 0, SEEK_SET) != 0) {
+        fclose(f);
+        snprintf(buf, bufsz, "CalyndaRtWord");
+        return;
+    }
+    if ((size_t)sz + 1 > bufsz) {
+        fclose(f);
+        snprintf(buf, bufsz, "CalyndaRtWord");
         return;
     }
     rsz = fread(buf, 1, (size_t)sz, f);
