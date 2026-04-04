@@ -89,32 +89,17 @@ patterns such as local `break` and `continue` helpers.
 - This is enforced as a **semantic rule**, not merely syntax. The compiler must
   verify call-site validity during semantic analysis.
 
-### 3.6 Manual Memory
-
-`manual()` is an explicitly **unsafe boundary** with C-style pointer/reference
-semantics and allocation helpers:
-
-- `*` and `&` — pointer dereference and address-of, as in C.
-- `malloc` — allocate memory for a given type.
-- `calloc` — allocate and zero-initialize contiguous memory.
-- `realloc` — resize a previously allocated block.
-- `free` — release memory associated with a pointer.
-
-`manual()` is **intentionally unsafe**. It tolerates runtime-fatal misuse (e.g.,
-use-after-free, double-free) instead of imposing ownership or lifetime rules. This
-is a deliberate design choice to stay close to C semantics.
-
-### 3.7 Static/Private Initialization
+### 3.6 Static/Private Initialization
 
 Calynda V2 retains a static/private top-level initialization model. Static
 variables are stored in the data segment. Static function forms and private
 initialization blocks follow C-inspired conventions.
 
-### 3.8 Prefix/Postfix Operators
+### 3.7 Prefix/Postfix Operators
 
 `++` and `--` are supported as both prefix and postfix operators.
 
-### 3.9 Varargs
+### 3.8 Varargs
 
 Java/C-style variadic parameters are supported:
 
@@ -124,11 +109,11 @@ int add = (int... nums) -> {};
 
 The variadic parameter is treated as an array within the function body.
 
-### 3.10 Discard Expression
+### 3.9 Discard Expression
 
 `_` is a **discard expression**. It signals that a value is intentionally unused.
 
-### 3.11 Import Model
+### 3.10 Import Model
 
 The V2 import system supports five forms with explicit export control and
 compile-time ambiguity checking.
@@ -184,7 +169,8 @@ qualification or aliasing. There is no implicit filename/directory fallback.
 
 | Item | Reason |
 |------|--------|
-| `asm()` | Deferred unless it solves a real problem that external adapters cannot solve. Will be re-evaluated only after the `manual()` model exists and only if a clear language-level justification remains (see Phase 4, step 12). |
+| `manual()` | Deferred to V3. Requires substantial design work — pointer/reference forms, allocation helpers, unsafe semantics, runtime interaction with the reified generics heap model. V2 ships without an unsafe memory boundary. |
+| `asm()` | Deferred to V3. Depends on `manual()` existing first; will be re-evaluated only after the manual memory model lands and only if a clear language-level justification remains that external adapters cannot solve. |
 | One-statement callback shorthand | Deferred pending explicit decision. Auto-lifting semantics must be frozen before implementation. Without a precise rule, the shorthand risks looking like immediate evaluation rather than deferred callback creation. |
 | Transitive wildcard imports | Out of the first import design. Wildcard imports bind only directly exported names from the target module. |
 
@@ -265,28 +251,15 @@ qualification or aliasing. There is no implicit filename/directory fallback.
     end up with multiple incompatible tagged-layout systems. Depends on steps 8
     and 9.
 
-### Phase 4 — Unsafe Boundaries
-
-> *Depends on Phase 3.*
-
-11. **Manual memory.** Add `manual()` as an explicitly unsafe boundary. Includes
-    parser support for pointer forms, allocation helpers, unsafe operations,
-    runtime failure behavior, and backend lowering. Depends on steps 8 and 9
-    because manual pointers interact with heap layout and runtime object
-    boundaries.
-
-12. **Re-evaluate asm().** Re-evaluate `asm()` only after the `manual()` model
-    exists and only if a clear language-level justification remains.
-
-### Phase 5 — Tooling Sync & Regression
+### Phase 4 — Tooling Sync & Regression
 
 > *After each accepted V2 slice lands.*
 
-13. **Synchronize tooling.** After each accepted V2 compiler slice lands,
+11. **Synchronize tooling.** After each accepted V2 compiler slice lands,
     synchronize duplicated language surfaces in the MCP server and VS Code
     extension so the tools do not advertise unsupported V2 syntax.
 
-14. **Regression coverage.** Add regression coverage for each accepted V2 slice
+12. **Regression coverage.** Add regression coverage for each accepted V2 slice
     across tokenizer, parser, AST dump, semantic dump, type resolution, type
     checking, IR lowering, and runtime/backend behavior as needed.
 
@@ -309,8 +282,8 @@ The following decisions have been explicitly made for the V2 design:
 - **Unions remain only as tagged unions.**
 - **Enums are removed** from the agreed V2 set.
 - **Cryptographic verification for asm** has been removed.
-- **`manual()` is intentionally unsafe** and currently tolerates runtime-fatal
-  misuse instead of ownership/lifetime rules.
+- **`manual()` and `asm()` are deferred to V3.** V2 ships without an unsafe
+  memory boundary or inline assembly. Both require their own design cycle.
 - **`_` is a discard expression.**
 - **Import model:** plain import, module alias, wildcard import, selective import,
   explicit export, and compile-time ambiguity errors.
@@ -325,10 +298,10 @@ The following decisions have been explicitly made for the V2 design:
    deferred unless its auto-lift rule is made completely explicit; otherwise it
    will look like immediate evaluation rather than deferred callback creation.
 
-2. **GC references in manual memory.** Allowing GC references inside manual memory
-   with only runtime-fatal protection remains the weakest semantic decision in the
-   set. If this becomes a blocker during implementation, narrow `manual()` to
-   plain scalars and raw addresses first.
+2. **GC references in manual memory (V3).** Allowing GC references inside manual
+   memory with only runtime-fatal protection remains the weakest semantic decision
+   in the set. When `manual()` lands in V3, if this becomes a blocker during
+   implementation, narrow it to plain scalars and raw addresses first.
 
 3. **Incremental generics.** "Generics everywhere from day one" is still wider than
    the current implementation architecture wants. A practical execution approach
@@ -350,15 +323,15 @@ The following decisions have been explicitly made for the V2 design:
 | `compiler/calynda.ebnf` | Canonical V1 grammar. Keep unchanged until a V2 slice is intentionally promoted. |
 | `compiler/src/tokenizer.h` | Add tokens for new keywords and operators: `export`, `as`, `internal`, `static`, `++`, `--`, and primitive aliases. |
 | `compiler/src/tokenizer.c` | Update keyword and operator recognition for V2 syntax. |
-| `compiler/src/parser.c` | Extend grammar handling for imports/exports, aliases, selective/wildcard imports, generic parameters, `arr<?>` types, varargs, discard expression, internal nested helpers, and manual constructs. |
-| `compiler/src/ast.h` | Add AST support for import/export forms, alias names, generic parameters, wildcard types, `arr<?>` metadata, tagged unions, discard expressions, internal visibility, static/private initialization, and manual constructs. |
+| `compiler/src/parser.c` | Extend grammar handling for imports/exports, aliases, selective/wildcard imports, generic parameters, `arr<?>` types, varargs, discard expression, and internal nested helpers. |
+| `compiler/src/ast.h` | Add AST support for import/export forms, alias names, generic parameters, wildcard types, `arr<?>` metadata, tagged unions, discard expressions, internal visibility, and static/private initialization. |
 | `compiler/src/symbol_table.c` | Implement name binding for imported/exported symbols, ambiguous import diagnostics, and internal nested-helper visibility rules. |
 | `compiler/src/type_resolution.c` | Resolve aliases, generic arguments, wildcard forms, import/export-visible types, and restricted V2 declaration shapes. |
-| `compiler/src/type_checker.c` | Enforce import ambiguity rules, internal visibility, varargs behavior, `++`/`--`, discard semantics, and later the generic/heterogeneous-array/manual semantics. |
-| `compiler/src/hir.c` | Lower V2 sugar and preserve enough metadata for imports, generics, `arr<?>`, unions, and manual boundaries. |
-| `compiler/src/mir.c` | Lower V2 runtime-visible operations including varargs packing, heterogeneous array access, tagged unions, and manual operations. |
+| `compiler/src/type_checker.c` | Enforce import ambiguity rules, internal visibility, varargs behavior, `++`/`--`, discard semantics, and generic/heterogeneous-array semantics. |
+| `compiler/src/hir.c` | Lower V2 sugar and preserve enough metadata for imports, generics, `arr<?>`, and unions. |
+| `compiler/src/mir.c` | Lower V2 runtime-visible operations including varargs packing, heterogeneous array access, and tagged unions. |
 | `compiler/src/runtime.h` | Extend runtime metadata for reified generics, heterogeneous arrays, and tagged unions. |
-| `compiler/src/runtime.c` | Implement runtime helpers and fatal-error behavior for unsafe/manual misuse. |
+| `compiler/src/runtime.c` | Implement runtime helpers for reified generics, heterogeneous arrays, and tagged unions. |
 | `compiler/src/bytecode.h` | Reflect any new runtime-visible metadata or opcodes needed by V2 features. |
 | `compiler/src/bytecode.c` | Lower V2 runtime-heavy features into bytecode where supported. |
 | `compiler/src/machine.c` | Handle native lowering for new operators, imports-visible calls, varargs packing, and runtime-backed V2 operations. |
