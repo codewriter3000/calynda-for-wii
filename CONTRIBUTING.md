@@ -1,12 +1,12 @@
-# Contributing to Calynda
+# Contributing to Calynda for Wii
 
-Thank you for your interest in contributing to Calynda! We welcome contributions from developers of all experience levels. Whether you're fixing a typo, reporting a bug, or proposing a new language feature, your contributions help make Calynda better for everyone.
+Thank you for your interest in contributing to Calynda for Wii! We welcome contributions from developers of all experience levels. Whether you're fixing a typo, reporting a bug, or proposing a new language feature, your contributions help make Calynda for Wii better for everyone.
 
 If you have any questions or concerns about contributing, please reach out to [amicharski@outlook.com](mailto:amicharski@outlook.com) and I'll be glad to help.
 
 ## Code of Conduct
 
-By participating in this project, you agree to maintain a respectful and collaborative environment. We're building Calynda together as a community.
+By participating in this project, you agree to maintain a respectful and collaborative environment. We're building Calynda for Wii together as a community.
 
 This project is licensed under the [MIT License](LICENSE). All contributions will be made under the same license.
 
@@ -14,8 +14,9 @@ This project is licensed under the [MIT License](LICENSE). All contributions wil
 
 Before contributing, make sure you have the following tools installed:
 
-- **gcc** 12.2 or later
+- **[devkitPPC](https://devkitpro.org/)** (provides the PowerPC cross-compiler for Wii)
 - **make**
+- **[Dolphin Emulator](https://dolphin-emu.org/)** (recommended for testing)
 - **Node.js** 25.6.1 or later (only needed for MCP server work)
 - **npm** 11.10.0 or later (only needed for MCP server work)
 
@@ -27,7 +28,7 @@ This is a monorepo containing three main components:
 
 | Component | Path | Description |
 |-----------|------|-------------|
-| **Compiler** | [`compiler/`](compiler/) | C compiler, runtime, and CLI |
+| **Compiler** | [`compiler/`](compiler/) | C compiler, runtime, and CLI (targeting Wii/PowerPC) |
 | **MCP Server** | [`mcp-server/`](mcp-server/) | Model Context Protocol server for AI assistant integration |
 | **VS Code Extension** | [`vscode-calynda/`](vscode-calynda/) | Syntax highlighting extension for VS Code |
 
@@ -142,11 +143,12 @@ For more context, see [version_wishlist.md](version_wishlist.md).
 
 ### Design Philosophy
 
-When proposing features, keep Calynda's philosophy in mind:
+When proposing features, keep Calynda for Wii's philosophy in mind:
 
 1. **Java-first, C-second**: Prefer Java-like syntax first, then C-like syntax when Java conventions don't apply
 2. **Simplicity**: Keep the language approachable for developers coming from Java 8 or C
 3. **External adapter principle**: Features that can live in external C or assembly adapters may be unnecessary in the core language
+4. **Wii-aware**: Consider the constraints of the Wii hardware (Broadway PowerPC, 88MB RAM) when proposing runtime-heavy features
 
 See [version_wishlist.md](version_wishlist.md) and [backend_strategy.md](backend_strategy.md) for more details on language design decisions.
 

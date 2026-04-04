@@ -1,6 +1,6 @@
-# Calynda V2 Language Specification
+# Calynda for Wii V2 Language Specification
 
-> This document is the authoritative specification for Calynda V2.
+> This document is the authoritative specification for Calynda for Wii V2.
 > It supersedes all prior wishlist content and defines the agreed language surface,
 > delivery plan, and outstanding decisions.
 
@@ -8,7 +8,7 @@
 
 ## 1. Philosophy
 
-Calynda V2 is a compatibility-oriented evolution aimed at developers coming from
+Calynda for Wii V2 is a compatibility-oriented evolution aimed at developers coming from
 Java 8 or C, while preserving V1 as the canonical shipped language until each V2
 slice is parser-complete, semantically specified, and mirrored across compiler and
 tooling.
@@ -54,8 +54,8 @@ Support both Calynda primitive names **and** Java-style aliases:
 
 Both notation systems remain in the language. Java-style aliases are primarily a
 transition aid for developers coming from Java; C developers may already be
-familiar with names like `char` and `double` that overlap with Calynda-native
-types. The Calynda-native names are the canonical form.
+familiar with names like `char` and `double` that overlap with Calynda for Wii-native
+types. The Calynda for Wii-native names are the canonical form.
 
 ### 3.2 Reified Generics
 
@@ -273,7 +273,7 @@ The following decisions have been explicitly made for the V2 design:
 - **Both primitive naming systems remain** because Java-style aliases are a
   transition aid.
 - **Generics are runtime-reified** and use Java-style generic syntax including
-  wildcard `<?>`.
+  wildcard `<?>`. Runtime reification must account for the Wii's memory constraints.
 - **The old struct idea is replaced by `arr<?>`**; there is no separate struct
   feature in the agreed V2 set.
 - **`arr<?>` assumes compile-time layout calculation** for literals and fixed
@@ -283,6 +283,7 @@ The following decisions have been explicitly made for the V2 design:
 - **Cryptographic verification for asm** has been removed.
 - **`manual()` and `asm()` are deferred to V3.** V2 ships without an unsafe
   memory boundary or inline assembly. Both require their own design cycle.
+  When `asm()` does land, it must target the Wii's Broadway PowerPC ISA.
 - **`_` is a discard expression.**
 - **Import model:** plain import, module alias, wildcard import, selective import,
   explicit export, and compile-time ambiguity errors.

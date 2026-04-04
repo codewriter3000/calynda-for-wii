@@ -94,7 +94,7 @@ Terminator opcodes are:
 
 The backend split is now:
 
-- native: AST -> HIR -> MIR -> LIR -> CodegenPlan -> MachineProgram -> x86_64 assembly -> linked executable
+- native: AST -> HIR -> MIR -> LIR -> CodegenPlan -> MachineProgram -> PowerPC assembly -> DOL executable
 - bytecode: AST -> HIR -> MIR -> BytecodeProgram portable-v1
 
 The bytecode backend exists so future portable execution remains compiled. Any future VM work should execute this bytecode format or a successor derived from it, not interpret AST, HIR, MIR, or LIR directly.

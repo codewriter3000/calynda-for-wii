@@ -1,6 +1,6 @@
-# Calynda Syntax
+# Calynda for Wii Syntax
 
-Minimal VS Code extension for Calynda syntax highlighting.
+Minimal VS Code extension for Calynda for Wii syntax highlighting.
 
 ## What it provides
 
