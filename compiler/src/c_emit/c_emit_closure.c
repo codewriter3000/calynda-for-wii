@@ -171,7 +171,13 @@ bool c_emit_prescan_program(CEmitContext *ctx, const HirProgram *program) {
                 return false;
             }
             break;
+        case HIR_TOP_LEVEL_BOOT:
+            if (!c_emit_prescan_block(ctx, decl->as.boot.body)) {
+                return false;
+            }
+            break;
         case HIR_TOP_LEVEL_UNION:
+        case HIR_TOP_LEVEL_EXTERN:
             break;
         }
     }

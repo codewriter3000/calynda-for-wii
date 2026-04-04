@@ -10,7 +10,8 @@
 
 typedef enum {
     BLOCK_CONTEXT_LAMBDA = 0,
-    BLOCK_CONTEXT_START
+    BLOCK_CONTEXT_START,
+    BLOCK_CONTEXT_BOOT
 } BlockContextKind;
 
 typedef struct {
@@ -117,6 +118,7 @@ const TypeCheckInfo *tc_check_lambda_expression(TypeChecker *checker,
                                                 const CheckedType *expected_return_type,
                                                 const AstSourceSpan *related_span);
 bool tc_check_start_decl(TypeChecker *checker, const AstStartDecl *start_decl);
+bool tc_check_boot_decl(TypeChecker *checker, const AstBootDecl *boot_decl);
 
 /* type_checker_block.c */
 bool tc_check_block(TypeChecker *checker, const AstBlock *block,

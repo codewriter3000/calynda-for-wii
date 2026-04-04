@@ -243,3 +243,77 @@ bool parser_parse_parameter_list(Parser *parser, AstParameterList *list,
 
     return true;
 }
+
+/* Parse an extern C parameter list that allows:
+ *   - empty list: c()
+ *   - typed params: c(string fmt)
+ *   - varargs: c(string fmt, ...)
+ *   - pure varargs: c(...)
+ */
+bool parser_parse_extern_param_list(Parser *parser, AstParameterList *list) {
+    ast_parameter_list_init(list);
+
+    /* Empty list */
+    if (parser_check(parser, TOK_RPAREN)) {
+        return true;
+    }
+
+    for (;;) {
+        AstParameter parameter;
+        const Token *name_token;
+
+        memset(&parameter, 0, sizeof(parameter));
+
+        /* Standalone varargs marker */
+        if (parser_check(parser, TOK_ELLIPSIS)) {
+            parser_advance(parser);
+            parameter.is_varargs = true;
+            ast_type_init_void(&parameter.type);
+            parameter.name = ast_copy_text("...");
+            if (!parameter.name) {
+                parser_set_oom_error(parser);
+                ast_parameter_list_free(list);
+                return false;
+            }
+            if (!parser_add_parameter(parser, list, &parameter)) {
+                ast_parameter_list_free(list);
+                return false;
+            }
+            break; /* varargs must be last */
+        }
+
+        if (!parser_parse_type(parser, &parameter.type)) {
+            ast_parameter_list_free(list);
+            return false;
+        }
+
+        /* Optional varargs after type */
+        if (parser_match(parser, TOK_ELLIPSIS)) {
+            parameter.is_varargs = true;
+        }
+
+        name_token = parser_current_token(parser);
+        parameter.name = parser_consume_identifier(parser, "Expected extern parameter name.");
+        if (!parameter.name) {
+            ast_type_free(&parameter.type);
+            ast_parameter_list_free(list);
+            return false;
+        }
+        parameter.name_span = parser_source_span(name_token);
+
+        if (!parser_add_parameter(parser, list, &parameter)) {
+            ast_parameter_list_free(list);
+            return false;
+        }
+
+        if (parameter.is_varargs) {
+            break;
+        }
+
+        if (!parser_match(parser, TOK_COMMA)) {
+            break;
+        }
+    }
+
+    return true;
+}

@@ -65,12 +65,15 @@ bool parser_parse_type(Parser *parser, AstType *type);
 bool parser_parse_generic_args(Parser *parser, AstType *type);
 bool parser_parse_parameter_list(Parser *parser, AstParameterList *list,
                                  bool allow_empty);
+bool parser_parse_extern_param_list(Parser *parser, AstParameterList *list);
 bool parser_parse_lambda_body(Parser *parser, AstLambdaBody *body);
 bool parser_parse_block_or_expression_body(Parser *parser, AstLambdaBody *body);
 
 /* parser_decl.c — top-level declarations */
 AstTopLevelDecl *parse_top_level_decl(Parser *parser);
 AstTopLevelDecl *parse_start_decl(Parser *parser);
+AstTopLevelDecl *parse_boot_decl(Parser *parser);
+AstTopLevelDecl *parse_extern_decl(Parser *parser);
 AstTopLevelDecl *parse_binding_decl(Parser *parser);
 AstBlock *parse_block(Parser *parser);
 

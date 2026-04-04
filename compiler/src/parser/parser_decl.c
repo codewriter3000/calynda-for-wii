@@ -42,6 +42,14 @@ AstTopLevelDecl *parse_top_level_decl(Parser *parser) {
         return parse_start_decl(parser);
     }
 
+    if (parser_check(parser, TOK_BOOT)) {
+        return parse_boot_decl(parser);
+    }
+
+    if (parser_check(parser, TOK_EXTERN)) {
+        return parse_extern_decl(parser);
+    }
+
     /* Peek past any modifier tokens to decide binding vs union. */
     if (parser_check(parser, TOK_PUBLIC) || parser_check(parser, TOK_PRIVATE) ||
         parser_check(parser, TOK_FINAL) || parser_check(parser, TOK_EXPORT) ||
@@ -93,6 +101,87 @@ AstTopLevelDecl *parse_start_decl(Parser *parser) {
         !parser_consume(parser, TOK_ARROW, "Expected '->' after start parameters.") ||
         !parser_parse_block_or_expression_body(parser, &decl->as.start_decl.body) ||
         !parser_consume(parser, TOK_SEMICOLON, "Expected ';' after start declaration.")) {
+        ast_top_level_decl_free(decl);
+        return NULL;
+    }
+
+    return decl;
+}
+
+AstTopLevelDecl *parse_boot_decl(Parser *parser) {
+    AstTopLevelDecl *decl = ast_top_level_decl_new(AST_TOP_LEVEL_BOOT);
+
+    if (!decl) {
+        parser_set_oom_error(parser);
+        return NULL;
+    }
+
+    decl->as.boot_decl.boot_span = parser_source_span(parser_current_token(parser));
+
+    if (!parser_consume(parser, TOK_BOOT, "Expected 'boot'.") ||
+        !parser_consume(parser, TOK_LPAREN, "Expected '(' after 'boot'.") ||
+        !parser_parse_parameter_list(parser, &decl->as.boot_decl.parameters, true) ||
+        !parser_consume(parser, TOK_RPAREN, "Expected ')' after boot parameters.") ||
+        !parser_consume(parser, TOK_ARROW, "Expected '->' after boot parameters.") ||
+        !parser_parse_block_or_expression_body(parser, &decl->as.boot_decl.body) ||
+        !parser_consume(parser, TOK_SEMICOLON, "Expected ';' after boot declaration.")) {
+        ast_top_level_decl_free(decl);
+        return NULL;
+    }
+
+    return decl;
+}
+
+AstTopLevelDecl *parse_extern_decl(Parser *parser) {
+    AstTopLevelDecl *decl = ast_top_level_decl_new(AST_TOP_LEVEL_EXTERN);
+    const Token     *name_token;
+    char            *name;
+
+    if (!decl) {
+        parser_set_oom_error(parser);
+        return NULL;
+    }
+
+    /* extern <ReturnType> <Name> = c(<ParamList>); */
+    if (!parser_consume(parser, TOK_EXTERN, "Expected 'extern'.")) {
+        ast_top_level_decl_free(decl);
+        return NULL;
+    }
+
+    if (!parser_parse_type(parser, &decl->as.extern_decl.return_type)) {
+        ast_top_level_decl_free(decl);
+        return NULL;
+    }
+
+    name_token = parser_current_token(parser);
+    name = parser_consume_identifier(parser, "Expected C function name after extern return type.");
+    if (!name) {
+        ast_top_level_decl_free(decl);
+        return NULL;
+    }
+    decl->as.extern_decl.name = name;
+    decl->as.extern_decl.name_span = parser_source_span(name_token);
+
+    if (!parser_consume(parser, TOK_ASSIGN, "Expected '=' after extern name.")) {
+        ast_top_level_decl_free(decl);
+        return NULL;
+    }
+
+    /* Expect literal identifier 'c' for the foreign signature tag */
+    if (!parser_check(parser, TOK_IDENTIFIER) ||
+        parser_current_token(parser)->length != 1 ||
+        parser_current_token(parser)->start[0] != 'c') {
+        parser_set_error(parser, *parser_current_token(parser),
+                         "Expected 'c' to introduce an extern C signature.");
+        ast_top_level_decl_free(decl);
+        return NULL;
+    }
+    parser_advance(parser);
+
+    if (!parser_consume(parser, TOK_LPAREN, "Expected '(' after 'c' in extern declaration.") ||
+        !parser_parse_extern_param_list(parser, &decl->as.extern_decl.parameters) ||
+        !parser_consume(parser, TOK_RPAREN, "Expected ')' after extern parameter list.") ||
+        !parser_consume(parser, TOK_SEMICOLON, "Expected ';' after extern declaration.")) {
         ast_top_level_decl_free(decl);
         return NULL;
     }

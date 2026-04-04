@@ -165,6 +165,65 @@ bool hr_lower_top_level_decls(HirBuildContext *context) {
                 free(hir_decl);
                 return false;
             }
+        } else if (ast_decl->kind == AST_TOP_LEVEL_BOOT) {
+            const Scope *boot_scope = symbol_table_find_scope(context->symbols,
+                                                               &ast_decl->as.boot_decl,
+                                                               SCOPE_KIND_BOOT);
+
+            hir_decl = hr_top_level_decl_new(HIR_TOP_LEVEL_BOOT);
+            if (!hir_decl) {
+                hr_set_error(context,
+                             ast_decl->as.boot_decl.boot_span,
+                             NULL,
+                             "Out of memory while lowering HIR boot declaration.");
+                return false;
+            }
+
+            if (!boot_scope) {
+                free(hir_decl);
+                hr_set_error(context,
+                             ast_decl->as.boot_decl.boot_span,
+                             NULL,
+                             "Internal error: missing boot scope during HIR lowering.");
+                return false;
+            }
+
+            hir_decl->as.boot.source_span = ast_decl->as.boot_decl.boot_span;
+            if (!hr_lower_parameters(context,
+                                     &hir_decl->as.boot.parameters,
+                                     &ast_decl->as.boot_decl.parameters,
+                                     boot_scope)) {
+                free(hir_decl);
+                return false;
+            }
+            hir_decl->as.boot.body = hr_lower_body_to_block(context,
+                                                             &ast_decl->as.boot_decl.body);
+            if (!hir_decl->as.boot.body) {
+                hr_free_parameter_list(&hir_decl->as.boot.parameters);
+                free(hir_decl);
+                return false;
+            }
+        } else if (ast_decl->kind == AST_TOP_LEVEL_EXTERN) {
+            hir_decl = hr_top_level_decl_new(HIR_TOP_LEVEL_EXTERN);
+            if (!hir_decl) {
+                hr_set_error(context,
+                             ast_decl->as.extern_decl.name_span,
+                             NULL,
+                             "Out of memory while lowering HIR extern declaration.");
+                return false;
+            }
+
+            hir_decl->as.extern_decl.name = ast_copy_text(ast_decl->as.extern_decl.name);
+            if (!hir_decl->as.extern_decl.name) {
+                free(hir_decl);
+                hr_set_error(context, ast_decl->as.extern_decl.name_span, NULL,
+                             "Out of memory while lowering extern name.");
+                return false;
+            }
+
+            hir_decl->as.extern_decl.source_span = ast_decl->as.extern_decl.name_span;
+            hir_decl->as.extern_decl.return_type  = ast_decl->as.extern_decl.return_type;
+            hir_decl->as.extern_decl.parameters   = ast_decl->as.extern_decl.parameters;
         } else {
             const Scope *start_scope = symbol_table_find_scope(context->symbols,
                                                                &ast_decl->as.start_decl,
@@ -210,7 +269,13 @@ bool hr_lower_top_level_decls(HirBuildContext *context) {
                 free(hir_decl->as.binding.name);
                 hr_free_callable_signature(&hir_decl->as.binding.callable_signature);
                 hir_expression_free(hir_decl->as.binding.initializer);
-            } else {
+            } else if (hir_decl->kind == HIR_TOP_LEVEL_BOOT) {
+                hr_free_parameter_list(&hir_decl->as.boot.parameters);
+                hir_block_free(hir_decl->as.boot.body);
+            } else if (hir_decl->kind == HIR_TOP_LEVEL_EXTERN) {
+                free(hir_decl->as.extern_decl.name);
+                /* parameters is a shallow copy, not freed here */
+            } else if (hir_decl->kind == HIR_TOP_LEVEL_START) {
                 hr_free_parameter_list(&hir_decl->as.start.parameters);
                 hir_block_free(hir_decl->as.start.body);
             }

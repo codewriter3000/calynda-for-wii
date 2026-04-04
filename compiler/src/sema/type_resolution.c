@@ -56,6 +56,20 @@ bool type_resolver_resolve_program(TypeResolver *resolver, const AstProgram *pro
                     }
                 }
             }
+        } else if (decl->kind == AST_TOP_LEVEL_EXTERN) {
+            /* Resolve the return type of the extern declaration */
+            if (!tr_resolve_declared_type(resolver,
+                                          &decl->as.extern_decl.return_type,
+                                          decl->as.extern_decl.name_span,
+                                          "extern",
+                                          decl->as.extern_decl.name,
+                                          true)) {
+                return false;
+            }
+        } else if (decl->kind == AST_TOP_LEVEL_BOOT) {
+            if (!tr_resolve_boot_decl(resolver, &decl->as.boot_decl)) {
+                return false;
+            }
         } else if (!tr_resolve_start_decl(resolver, &decl->as.start_decl)) {
             return false;
         }

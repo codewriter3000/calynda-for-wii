@@ -39,6 +39,7 @@ bool tr_resolve_declared_type(TypeResolver *resolver,
                               bool allow_void);
 bool tr_resolve_binding_decl(TypeResolver *resolver, const AstBindingDecl *binding_decl);
 bool tr_resolve_start_decl(TypeResolver *resolver, const AstStartDecl *start_decl);
+bool tr_resolve_boot_decl(TypeResolver *resolver, const AstBootDecl *boot_decl);
 bool tr_resolve_parameter(TypeResolver *resolver, const AstParameter *parameter);
 bool tr_resolve_block(TypeResolver *resolver, const AstBlock *block);
 

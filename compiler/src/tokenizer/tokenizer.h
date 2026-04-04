@@ -32,6 +32,8 @@ typedef enum {
     TOK_PACKAGE,
     TOK_IMPORT,
     TOK_START,
+    TOK_BOOT,
+    TOK_EXTERN,
     TOK_VAR,
     TOK_PUBLIC,
     TOK_PRIVATE,

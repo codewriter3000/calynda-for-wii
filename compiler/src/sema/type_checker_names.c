@@ -157,6 +157,8 @@ const char *tc_block_context_name(BlockContextKind kind) {
         return "lambda body";
     case BLOCK_CONTEXT_START:
         return "start";
+    case BLOCK_CONTEXT_BOOT:
+        return "boot";
     }
 
     return "block";

@@ -97,10 +97,17 @@ AstTopLevelDecl *ast_top_level_decl_new(AstTopLevelDeclKind kind) {
     if (kind == AST_TOP_LEVEL_START) {
         ast_parameter_list_init(&decl->as.start_decl.parameters);
         ast_lambda_body_init_internal(&decl->as.start_decl.body);
+    } else if (kind == AST_TOP_LEVEL_BOOT) {
+        ast_parameter_list_init(&decl->as.boot_decl.parameters);
+        ast_lambda_body_init_internal(&decl->as.boot_decl.body);
     } else if (kind == AST_TOP_LEVEL_BINDING) {
         ast_type_init_void(&decl->as.binding_decl.declared_type);
     } else if (kind == AST_TOP_LEVEL_UNION) {
         memset(&decl->as.union_decl, 0, sizeof(decl->as.union_decl));
+    } else if (kind == AST_TOP_LEVEL_EXTERN) {
+        memset(&decl->as.extern_decl, 0, sizeof(decl->as.extern_decl));
+        ast_type_init_void(&decl->as.extern_decl.return_type);
+        ast_parameter_list_init(&decl->as.extern_decl.parameters);
     }
 
     return decl;
@@ -116,11 +123,20 @@ void ast_top_level_decl_free(AstTopLevelDecl *decl) {
         ast_parameter_list_free(&decl->as.start_decl.parameters);
         ast_lambda_body_free_internal(&decl->as.start_decl.body);
         break;
+    case AST_TOP_LEVEL_BOOT:
+        ast_parameter_list_free(&decl->as.boot_decl.parameters);
+        ast_lambda_body_free_internal(&decl->as.boot_decl.body);
+        break;
     case AST_TOP_LEVEL_BINDING:
         ast_binding_decl_free_fields_internal(&decl->as.binding_decl);
         break;
     case AST_TOP_LEVEL_UNION:
         ast_union_decl_free_fields(&decl->as.union_decl);
+        break;
+    case AST_TOP_LEVEL_EXTERN:
+        free(decl->as.extern_decl.name);
+        ast_type_free(&decl->as.extern_decl.return_type);
+        ast_parameter_list_free(&decl->as.extern_decl.parameters);
         break;
     }
 

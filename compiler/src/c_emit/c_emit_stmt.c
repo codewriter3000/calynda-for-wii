@@ -3,12 +3,21 @@
 #include <stdio.h>
 #include <string.h>
 
+static void emit_line_directive(CEmitContext *ctx, AstSourceSpan span) {
+    if (!ctx->source_file || span.start_line <= 0) {
+        return;
+    }
+    fprintf(ctx->out, "#line %d \"%s\"\n", span.start_line, ctx->source_file);
+}
+
 bool c_emit_stmt(CEmitContext *ctx, const HirStatement *stmt) {
     FILE *out = ctx->out;
 
     if (!stmt) {
         return true;
     }
+
+    emit_line_directive(ctx, stmt->source_span);
 
     switch (stmt->kind) {
 
@@ -35,7 +44,9 @@ bool c_emit_stmt(CEmitContext *ctx, const HirStatement *stmt) {
             if (!c_emit_expr(ctx, stmt->as.return_expression)) {
                 return false;
             }
-        } else {
+        } else if (!ctx->is_boot_context) {
+            /* boot() declares void return; bare 'return;' compiles without a value.
+             * For start() and lambdas (CalyndaRtWord return), emit an explicit zero. */
             fputs("(CalyndaRtWord)0", out);
         }
         fputs(";\n", out);

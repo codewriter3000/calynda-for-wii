@@ -160,6 +160,26 @@ bool tr_resolve_start_decl(TypeResolver *resolver, const AstStartDecl *start_dec
     return tr_resolve_expression(resolver, start_decl->body.as.expression);
 }
 
+bool tr_resolve_boot_decl(TypeResolver *resolver, const AstBootDecl *boot_decl) {
+    size_t i;
+
+    if (!boot_decl) {
+        return true;
+    }
+
+    for (i = 0; i < boot_decl->parameters.count; i++) {
+        if (!tr_resolve_parameter(resolver, &boot_decl->parameters.items[i])) {
+            return false;
+        }
+    }
+
+    if (boot_decl->body.kind == AST_LAMBDA_BODY_BLOCK) {
+        return tr_resolve_block(resolver, boot_decl->body.as.block);
+    }
+
+    return tr_resolve_expression(resolver, boot_decl->body.as.expression);
+}
+
 bool tr_resolve_block(TypeResolver *resolver, const AstBlock *block) {
     size_t i;
 

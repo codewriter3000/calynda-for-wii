@@ -55,6 +55,8 @@ bool st_analyze_top_level_decl(SymbolTable *table,
                                Scope *scope);
 bool st_analyze_start_decl(SymbolTable *table, const AstStartDecl *start_decl,
                            Scope *parent_scope);
+bool st_analyze_boot_decl(SymbolTable *table, const AstBootDecl *boot_decl,
+                          Scope *parent_scope);
 bool st_analyze_union_decl(SymbolTable *table, const AstUnionDecl *union_decl,
                            Scope *parent_scope);
 bool st_analyze_lambda_expression(SymbolTable *table,

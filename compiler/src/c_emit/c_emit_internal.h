@@ -24,6 +24,10 @@ typedef struct {
     size_t             lambda_capacity;
     /* Temp-arg counter for call expressions */
     int                call_tmp_counter;
+    /* Source file name for #line directives (may be NULL) */
+    const char        *source_file;
+    /* True when emitting inside a boot() function (void return) */
+    bool               is_boot_context;
 } CEmitContext;
 
 /* c_emit_names.c */

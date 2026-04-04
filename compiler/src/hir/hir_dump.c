@@ -62,8 +62,7 @@ bool hir_dump_program(FILE *out, const HirProgram *program) {
             if (!hir_dump_expression(out, decl->as.binding.initializer, 8)) {
                 return false;
             }
-        } else if (decl->kind == HIR_TOP_LEVEL_UNION) {
-            size_t j;
+        } else if (decl->kind == HIR_TOP_LEVEL_UNION) {            size_t j;
 
             fprintf(out, "    Union name=%s", decl->as.union_decl.name);
             if (decl->as.union_decl.is_exported) {
@@ -90,6 +89,46 @@ bool hir_dump_program(FILE *out, const HirProgram *program) {
                 }
                 fputc('\n', out);
             }
+        } else if (decl->kind == HIR_TOP_LEVEL_BOOT) {
+            size_t j;
+
+            fprintf(out, "    Boot span=");
+            hir_dump_write_span(out, decl->as.boot.source_span);
+            fputc('\n', out);
+            fprintf(out, "      Parameters:\n");
+            for (j = 0; j < decl->as.boot.parameters.count; j++) {
+                fprintf(out, "        Param name=%s type=", decl->as.boot.parameters.items[j].name);
+                if (!hir_dump_write_checked_type(out, decl->as.boot.parameters.items[j].type)) {
+                    return false;
+                }
+                if (decl->as.boot.parameters.items[j].is_varargs) {
+                    fprintf(out, " varargs");
+                }
+                fprintf(out, " span=");
+                hir_dump_write_span(out, decl->as.boot.parameters.items[j].source_span);
+                fputc('\n', out);
+            }
+            fprintf(out, "      Body:\n");
+            if (!hir_dump_block(out, decl->as.boot.body, 8)) {
+                return false;
+            }
+        } else if (decl->kind == HIR_TOP_LEVEL_EXTERN) {
+            size_t j;
+
+            fprintf(out, "    Extern name=%s span=", decl->as.extern_decl.name);
+            hir_dump_write_span(out, decl->as.extern_decl.source_span);
+            fputc('\n', out);
+            fprintf(out, "      Params:");
+            for (j = 0; j < decl->as.extern_decl.parameters.count; j++) {
+                fprintf(out, " %s",
+                        decl->as.extern_decl.parameters.items[j].name
+                            ? decl->as.extern_decl.parameters.items[j].name
+                            : "<varargs>");
+                if (decl->as.extern_decl.parameters.items[j].is_varargs) {
+                    fprintf(out, "...");
+                }
+            }
+            fputc('\n', out);
         } else {
             size_t j;
 

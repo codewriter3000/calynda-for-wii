@@ -114,6 +114,8 @@ const char *token_type_name(TokenType type) {
     case TOK_PACKAGE:        return "PACKAGE";
     case TOK_IMPORT:         return "IMPORT";
     case TOK_START:          return "START";
+    case TOK_BOOT:           return "BOOT";
+    case TOK_EXTERN:         return "EXTERN";
     case TOK_VAR:            return "VAR";
     case TOK_PUBLIC:         return "PUBLIC";
     case TOK_PRIVATE:        return "PRIVATE";

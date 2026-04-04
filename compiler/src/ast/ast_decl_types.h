@@ -140,6 +140,19 @@ typedef struct {
 } AstStartDecl;
 
 typedef struct {
+    AstParameterList parameters;
+    AstLambdaBody    body;
+    AstSourceSpan    boot_span;
+} AstBootDecl;
+
+typedef struct {
+    char            *name;
+    AstType          return_type;
+    AstParameterList parameters;
+    AstSourceSpan    name_span;
+} AstExternDecl;
+
+typedef struct {
     char    *name;
     AstType *payload_type;   /* NULL if no payload */
 } AstUnionVariant;
@@ -160,16 +173,20 @@ typedef struct {
 
 typedef enum {
     AST_TOP_LEVEL_START = 0,
+    AST_TOP_LEVEL_BOOT,
     AST_TOP_LEVEL_BINDING,
-    AST_TOP_LEVEL_UNION
+    AST_TOP_LEVEL_UNION,
+    AST_TOP_LEVEL_EXTERN
 } AstTopLevelDeclKind;
 
 struct AstTopLevelDecl {
     AstTopLevelDeclKind kind;
     union {
         AstStartDecl   start_decl;
+        AstBootDecl    boot_decl;
         AstBindingDecl binding_decl;
         AstUnionDecl   union_decl;
+        AstExternDecl  extern_decl;
     } as;
 };
 

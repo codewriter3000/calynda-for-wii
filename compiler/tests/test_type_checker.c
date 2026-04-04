@@ -413,7 +413,7 @@ static void test_type_checker_requires_start_entry_point(void) {
     REQUIRE_TRUE(error != NULL, "missing start error exists");
     REQUIRE_TRUE(type_checker_format_error(error, diagnostic, sizeof(diagnostic_buffer)),
                  "format missing start error");
-    ASSERT_EQ_STR("Program must declare exactly one start entry point.",
+    ASSERT_EQ_STR("Program must declare exactly one entry point (start() or boot()).",
                   diagnostic,
                   "formatted missing start diagnostic");
 

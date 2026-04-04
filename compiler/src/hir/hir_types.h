@@ -60,6 +60,20 @@ typedef struct {
 } HirStartDecl;
 
 typedef struct {
+    HirParameterList parameters;
+    HirBlock        *body;
+    AstSourceSpan    source_span;
+} HirBootDecl;
+
+typedef struct {
+    char         *name;
+    AstSourceSpan source_span;
+    AstType       return_type;
+    /* Raw parameter list (no scope symbols for extern params) */
+    AstParameterList parameters;
+} HirExternDecl;
+
+typedef struct {
     char         *name;
     CheckedType   payload_type;
     bool          has_payload;
@@ -80,7 +94,9 @@ typedef struct {
 typedef enum {
     HIR_TOP_LEVEL_BINDING = 0,
     HIR_TOP_LEVEL_START,
-    HIR_TOP_LEVEL_UNION
+    HIR_TOP_LEVEL_BOOT,
+    HIR_TOP_LEVEL_UNION,
+    HIR_TOP_LEVEL_EXTERN
 } HirTopLevelDeclKind;
 
 struct HirTopLevelDecl {
@@ -88,7 +104,9 @@ struct HirTopLevelDecl {
     union {
         HirBindingDecl binding;
         HirStartDecl   start;
+        HirBootDecl    boot;
         HirUnionDecl   union_decl;
+        HirExternDecl  extern_decl;
     } as;
 };
 
