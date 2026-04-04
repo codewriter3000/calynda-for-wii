@@ -62,8 +62,6 @@ class SemanticAnalyzer {
       case 'VoidType': return { kind: 'void' };
       case 'ArrayType': return { kind: 'array', elementType: this.typeFromAnnotation(ann.elementType) };
       case 'NamedType': return { kind: 'named', name: ann.name, genericArgs: ann.genericArgs.map(a => this.typeFromAnnotation(a)) };
-      case 'HeterogeneousArrayType': return { kind: 'heterogeneous_array', genericArgs: ann.genericArgs.map(a => this.typeFromAnnotation(a)) };
-      case 'WildcardType': return { kind: 'wildcard' };
     }
   }
 
@@ -86,7 +84,7 @@ class SemanticAnalyzer {
       this.defineSymbol(decl.name, type, decl);
       this.globalSymbols.set(decl.name, type);
     } else if (decl.kind === 'UnionDecl') {
-      const unionType: CalyndaType = { kind: 'union', name: decl.name, genericParams: decl.genericParams };
+      const unionType: CalyndaType = { kind: 'named', name: decl.name, genericArgs: decl.genericParams.map(() => ({ kind: 'unknown' as const })) };
       this.defineSymbol(decl.name, unionType, decl);
       this.globalSymbols.set(decl.name, unionType);
     }
@@ -195,12 +193,6 @@ class SemanticAnalyzer {
         this.popScope();
         return { kind: 'lambda', params: paramTypes, returnType: retType };
       }
-      case 'DiscardExpression':
-        return { kind: 'unknown' };
-      case 'PostfixIncrementExpression':
-      case 'PostfixDecrementExpression':
-        this.analyzeExpression(expr.operand);
-        return { kind: 'unknown' };
       default:
         return { kind: 'unknown' };
     }

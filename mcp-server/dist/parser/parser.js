@@ -104,41 +104,12 @@ class Parser {
     parseImportDecl() {
         const startTok = this.eat('keyword', 'import');
         const name = this.parseQualifiedName();
-        // import foo.bar as baz;
-        if (this.check('keyword', 'as')) {
-            this.advance();
-            const alias = this.eat('identifier').value;
-            this.eat('semicolon');
-            return { kind: 'ImportDecl', name, form: 'alias', alias, start: this.tokenToPosition(startTok), end: this.position() };
-        }
-        // import foo.bar.* or import foo.bar.{a, b, c}
-        if (this.check('dot')) {
-            this.advance();
-            if (this.check('star')) {
-                this.advance();
-                this.eat('semicolon');
-                return { kind: 'ImportDecl', name, form: 'wildcard', start: this.tokenToPosition(startTok), end: this.position() };
-            }
-            if (this.check('lbrace')) {
-                this.advance();
-                const selected = [];
-                selected.push(this.eat('identifier').value);
-                while (this.check('comma')) {
-                    this.advance();
-                    selected.push(this.eat('identifier').value);
-                }
-                this.eat('rbrace');
-                this.eat('semicolon');
-                return { kind: 'ImportDecl', name, form: 'selective', selected, start: this.tokenToPosition(startTok), end: this.position() };
-            }
-        }
-        // plain import foo.bar;
         this.eat('semicolon');
-        return { kind: 'ImportDecl', name, form: 'plain', start: this.tokenToPosition(startTok), end: this.position() };
+        return { kind: 'ImportDecl', name, start: this.tokenToPosition(startTok), end: this.position() };
     }
     parseQualifiedName() {
         let name = this.eat('identifier').value;
-        while (this.check('dot') && this.peek(1).type === 'identifier') {
+        while (this.check('dot')) {
             this.advance();
             name += '.' + this.eat('identifier').value;
         }
@@ -241,8 +212,8 @@ class Parser {
         if (this.check('keyword', 'arr')) {
             this.advance();
             const genericArgs = this.parseGenericArgs();
-            const heteroNode = { kind: 'HeterogeneousArrayType', genericArgs, start: startPos, end: this.position() };
-            return heteroNode;
+            const namedNode = { kind: 'NamedType', name: 'arr', genericArgs, start: startPos, end: this.position() };
+            return namedNode;
         }
         let typeNode;
         if (this.check('identifier')) {
@@ -270,7 +241,7 @@ class Parser {
         if (this.check('question')) {
             const pos = this.position();
             this.advance();
-            return { kind: 'WildcardType', start: pos, end: this.position() };
+            return { kind: 'NamedType', name: '?', genericArgs: [], start: pos, end: this.position() };
         }
         return this.parseType();
     }
@@ -299,13 +270,8 @@ class Parser {
     parseParameter() {
         const startPos = this.position();
         const typeAnnotation = this.parseType();
-        let isVarargs = false;
-        if (this.check('ellipsis')) {
-            this.advance();
-            isVarargs = true;
-        }
         const name = this.eat('identifier').value;
-        return { kind: 'Parameter', typeAnnotation, name, isVarargs, start: startPos, end: this.position() };
+        return { kind: 'Parameter', typeAnnotation, name, start: startPos, end: this.position() };
     }
     parseLambdaBody() {
         if (this.check('lbrace'))
@@ -564,12 +530,6 @@ class Parser {
             const operand = this.parseUnary();
             return { kind: 'UnaryExpression', operator: op, operand, start: startPos, end: this.position() };
         }
-        // V2: prefix ++ and --
-        if (this.check('plusplus') || this.check('minusminus')) {
-            const op = this.advance().value;
-            const operand = this.parseUnary();
-            return { kind: 'UnaryExpression', operator: op, operand, start: startPos, end: this.position() };
-        }
         return this.parsePostfix();
     }
     parsePostfix() {
@@ -598,16 +558,6 @@ class Parser {
                 this.advance();
                 const member = this.eat('identifier').value;
                 expr = { kind: 'MemberExpression', object: expr, member, start: expr.start, end: this.position() };
-            }
-            else if (this.check('plusplus')) {
-                // V2: postfix ++
-                this.advance();
-                expr = { kind: 'PostfixIncrementExpression', operand: expr, start: expr.start, end: this.position() };
-            }
-            else if (this.check('minusminus')) {
-                // V2: postfix --
-                this.advance();
-                expr = { kind: 'PostfixDecrementExpression', operand: expr, start: expr.start, end: this.position() };
             }
             else {
                 break;
@@ -709,11 +659,6 @@ class Parser {
         if (tok.type === 'identifier') {
             this.advance();
             return { kind: 'Identifier', name: tok.value, start: startPos, end: this.position() };
-        }
-        // V2: discard expression `_`
-        if (tok.type === 'underscore') {
-            this.advance();
-            return { kind: 'DiscardExpression', start: startPos, end: this.position() };
         }
         // throw in expression context (e.g. ternary branch): model as unary
         if (tok.type === 'keyword' && tok.value === 'throw') {
