@@ -1,0 +1,65 @@
+/*
+ * counter_example.cal — Calynda + JSX counter demo.
+ *
+ * Demonstrates:
+ *   - signal declarations (reactive state)
+ *   - JSX elements mapping to libwiigui widgets
+ *   - CSS-like style properties (width, height, color, background-color)
+ *   - Event handlers (onClick)
+ *   - Reactive text updates via template literals
+ */
+
+import io.gui
+
+component Counter() -> {
+    signal count = 0
+
+    <Window width={640} height={480}>
+        <Text
+            size={28}
+            x={220}
+            y={180}
+            style={{
+                color: "#FFFFFF",
+                width: 200
+            }}>
+            {`Count: ${count()}`}
+        </Text>
+
+        <Button
+            width={200}
+            height={50}
+            x={220}
+            y={260}
+            onClick={() -> set count(count() + 1)}>
+            <Text
+                size={22}
+                style={{ color: "#000000" }}>
+                {"Increment"}
+            </Text>
+        </Button>
+
+        <Button
+            width={200}
+            height={50}
+            x={220}
+            y={320}
+            onClick={() -> set count(0)}>
+            <Text
+                size={22}
+                style={{ color: "#000000" }}>
+                {"Reset"}
+            </Text>
+        </Button>
+
+        <Image
+            width={640}
+            height={480}
+            style={{ background-color: "#2D2D2D" }}
+        />
+    </Window>
+}
+
+boot() -> {
+    gui.mount(Counter())
+}
