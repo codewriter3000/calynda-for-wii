@@ -8,6 +8,7 @@
 
 #include "calynda_runtime.h"
 #include "calynda_wpad.h"
+#include "calynda_mii.h"
 #include "calynda_gc.h"
 
 #include <inttypes.h>
@@ -595,6 +596,9 @@ CalyndaRtWord __calynda_rt_call_callable(CalyndaRtWord callable,
     case CALYNDA_RT_OBJECT_EXTERN_CALLABLE: {
         const CalyndaRtExternCallable *ec =
             (const CalyndaRtExternCallable *)(const void *)h;
+        if ((int)ec->kind >= 200) {
+            return calynda_mii_dispatch(ec, argument_count, arguments);
+        }
         if ((int)ec->kind >= 100) {
             return calynda_wpad_dispatch(ec, argument_count, arguments);
         }
@@ -623,6 +627,10 @@ CalyndaRtWord __calynda_rt_member_load(CalyndaRtWord target, const char *member)
     }
     if (h == &__calynda_pkg_wpad.header) {
         CalyndaRtWord result = calynda_wpad_member_load(member);
+        if (result != 0) return result;
+    }
+    if (h == &__calynda_pkg_mii.header) {
+        CalyndaRtWord result = calynda_mii_member_load(member);
         if (result != 0) return result;
     }
     fprintf(stderr, "runtime: unsupported member load .%s\n", member);
@@ -722,8 +730,9 @@ CalyndaRtWord __calynda_rt_cast_value(CalyndaRtWord source, CalyndaRtTypeTag tar
 }
 
 void calynda_rt_init(void) {
-    /* Register WPAD static objects so they pass as_object validation. */
+    /* Register static objects so they pass as_object validation. */
     calynda_wpad_register_objects();
+    calynda_mii_register_objects();
 }
 
 int calynda_rt_start_process(CalyndaRtProgramStartEntry entry, int argc, char **argv) {

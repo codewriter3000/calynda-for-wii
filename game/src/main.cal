@@ -1,30 +1,22 @@
 import io.stdlib;
-import io.wpad;
+import io.mii;
 
-var check_buttons = (int btns) -> {
-    btns != 0 ? stdlib.print("Button pressed!") : 0;
-    wpad.has_button(btns, wpad.BUTTON_A())     != 0 ? stdlib.print("A")     : 0;
-    wpad.has_button(btns, wpad.BUTTON_B())     != 0 ? stdlib.print("B")     : 0;
-    wpad.has_button(btns, wpad.BUTTON_1())     != 0 ? stdlib.print("1")     : 0;
-    wpad.has_button(btns, wpad.BUTTON_2())     != 0 ? stdlib.print("2")     : 0;
-    wpad.has_button(btns, wpad.BUTTON_UP())    != 0 ? stdlib.print("Up")    : 0;
-    wpad.has_button(btns, wpad.BUTTON_DOWN())  != 0 ? stdlib.print("Down")  : 0;
-    wpad.has_button(btns, wpad.BUTTON_LEFT())  != 0 ? stdlib.print("Left")  : 0;
-    wpad.has_button(btns, wpad.BUTTON_RIGHT()) != 0 ? stdlib.print("Right") : 0;
-    wpad.has_button(btns, wpad.BUTTON_PLUS())  != 0 ? stdlib.print("Plus")  : 0;
-    wpad.has_button(btns, wpad.BUTTON_MINUS()) != 0 ? stdlib.print("Minus") : 0;
-    wpad.has_button(btns, wpad.BUTTON_HOME())  != 0 ? stdlib.print("Home")  : 0;
-};
-
-var loop = () -> {
-    wpad.scan();
-    var btns = wpad.buttons_down(0);
-    check_buttons(btns);
-    loop();
+var loop = (int idx, int total) -> {
+    stdlib.print("--- Mii ---");
+    stdlib.print(mii.name(idx));
+    stdlib.print(mii.creator(idx));
+    stdlib.print(mii.height(idx));
+    stdlib.print(mii.weight(idx));
+    stdlib.print(mii.fav_color(idx));
+    stdlib.print(`Total: ${string(total)}`);
+    return idx + 1 < total ? loop(idx + 1, total) : 0;
 };
 
 boot() -> {
-    wpad.init();
-    stdlib.print("Waiting for button presses...");
-    loop();
+    stdlib.print("Loading Miis from remote...");
+    mii.load_remote(0);
+    int total = mii.count();
+    stdlib.print(`We have found ${total} miis`);
+    total > 0 ? loop(0, total) : 0;
+    stdlib.print("Done!");
 };
