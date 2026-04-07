@@ -17,6 +17,7 @@
     "highlighting",
     "language"
   ],
+  "icon": "calynda-icon.svg",
   "contributes": {
     "languages": [
       {
@@ -28,6 +29,10 @@
         "extensions": [
           ".cal"
         ],
+        "icon": {
+          "light": "./calynda-icon.svg",
+          "dark": "./calynda-icon.svg"
+        },
         "configuration": "./language-configuration.json"
       }
     ],
