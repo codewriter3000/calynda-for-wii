@@ -1,0 +1,6 @@
+import io.stdlib;
+
+start(string[] args) -> {
+    stdlib.print(`Hello from Calynda on ${() -> "Alex's Wii"}!`);
+    return 0;
+};

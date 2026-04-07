@@ -2,8 +2,9 @@
 #define CALYNDA_RUNTIME_H
 
 /*
- * Portable C runtime for the calynda-for-wii 32-bit target.
- * CalyndaRtWord is 32-bit (matching Wii/Broadway pointer width).
+ * Portable C runtime for the calynda compiler.
+ * CalyndaRtWord matches the target pointer width:
+ *   32-bit on Wii/GC (CALYNDA_WII_BUILD), pointer-width on host.
  */
 
 #include "calynda_gc.h"
@@ -13,8 +14,9 @@
 #include <stdint.h>
 #include <stdio.h>
 
-/* The fundamental word type: 32-bit for the Wii target. */
-typedef uint32_t CalyndaRtWord;
+/* The fundamental word type: pointer-width so it can carry both
+   integers and object pointers on any platform. */
+typedef uintptr_t CalyndaRtWord;
 
 typedef CalyndaRtWord (*CalyndaRtProgramStartEntry)(CalyndaRtWord arguments);
 

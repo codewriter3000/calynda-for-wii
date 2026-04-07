@@ -27,6 +27,19 @@ static bool emit_forward_decls(CEmitContext *ctx, const HirProgram *program) {
     FILE   *out = ctx->out;
     size_t  i;
 
+    /* Emit import package bindings */
+    for (i = 0; i < program->import_count; i++) {
+        const HirNamedSymbol *imp = &program->imports[i];
+        if (imp->name) {
+            fprintf(out, "#define __cal_%s "
+                         "((CalyndaRtWord)(uintptr_t)&__calynda_pkg_%s)\n",
+                    imp->name, imp->name);
+        }
+    }
+    if (program->import_count > 0) {
+        fputc('\n', out);
+    }
+
     /* Emit extern C forward declarations first */
     for (i = 0; i < program->top_level_count; i++) {
         const HirTopLevelDecl *decl = program->top_level_decls[i];
