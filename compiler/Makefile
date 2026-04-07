@@ -38,7 +38,7 @@ HIR_OBJS             = $(BUILD_DIR)/hir.o $(BUILD_DIR)/hir_memory.o $(BUILD_DIR)
 HIR_DUMP_OBJS        = $(BUILD_DIR)/hir_dump.o $(BUILD_DIR)/hir_dump_helpers.o $(BUILD_DIR)/hir_dump_expr.o $(BUILD_DIR)/hir_dump_expr_ext.o
 RUNTIME_OBJS         = $(BUILD_DIR)/runtime.o $(BUILD_DIR)/runtime_names.o $(BUILD_DIR)/runtime_format.o $(BUILD_DIR)/runtime_ops.o $(BUILD_DIR)/runtime_union.o
 C_EMIT_OBJS          = $(BUILD_DIR)/c_emit.o $(BUILD_DIR)/c_emit_type.o $(BUILD_DIR)/c_emit_names.o $(BUILD_DIR)/c_emit_expr.o $(BUILD_DIR)/c_emit_stmt.o $(BUILD_DIR)/c_emit_closure.o
-C_RUNTIME_OBJS       = $(BUILD_DIR)/calynda_gc_refcount.o $(BUILD_DIR)/calynda_runtime.o
+C_RUNTIME_OBJS       = $(BUILD_DIR)/calynda_gc_refcount.o $(BUILD_DIR)/calynda_runtime.o $(BUILD_DIR)/calynda_wpad.o
 DUMP_AST_OBJS        = $(BUILD_DIR)/dump_ast.o
 DUMP_SEMANTICS_OBJS  = $(BUILD_DIR)/dump_semantics.o
 CALYNDA_CLI_OBJS     = $(BUILD_DIR)/calynda.o $(BUILD_DIR)/calynda_compile.o $(BUILD_DIR)/calynda_utils.o
@@ -88,8 +88,8 @@ HOST_RT_DIR = $(BUILD_DIR)/host
 WII_RT_DIR  = $(BUILD_DIR)/wii
 
 # Per-target runtime objects
-HOST_RT_OBJS = $(HOST_RT_DIR)/calynda_runtime.o $(HOST_RT_DIR)/calynda_gc_refcount.o
-WII_RT_OBJS  = $(WII_RT_DIR)/calynda_runtime.o $(WII_RT_DIR)/calynda_gc_refcount.o $(WII_RT_DIR)/calynda_wii_io.o $(WII_RT_DIR)/calynda_wii_main.o
+HOST_RT_OBJS = $(HOST_RT_DIR)/calynda_runtime.o $(HOST_RT_DIR)/calynda_gc_refcount.o $(HOST_RT_DIR)/calynda_wpad.o
+WII_RT_OBJS  = $(WII_RT_DIR)/calynda_runtime.o $(WII_RT_DIR)/calynda_gc_refcount.o $(WII_RT_DIR)/calynda_wpad.o $(WII_RT_DIR)/calynda_wii_io.o $(WII_RT_DIR)/calynda_wii_main.o
 
 PREFIX ?= /usr/local
 INSTALL_BIN_DIR ?= $(PREFIX)/bin
@@ -338,7 +338,10 @@ $(BUILD_DIR)/c_emit_closure.o: $(C_EMIT_DIR)/c_emit_closure.c $(C_EMIT_DIR)/c_em
 $(BUILD_DIR)/calynda_gc_refcount.o: $(C_RUNTIME_DIR)/calynda_gc_refcount.c $(C_RUNTIME_DIR)/calynda_gc.h | $(BUILD_DIR)
 	$(CC) $(CFLAGS) -c $< -o $@
 
-$(BUILD_DIR)/calynda_runtime.o: $(C_RUNTIME_DIR)/calynda_runtime.c $(C_RUNTIME_DIR)/calynda_runtime.h $(C_RUNTIME_DIR)/calynda_gc.h | $(BUILD_DIR)
+$(BUILD_DIR)/calynda_runtime.o: $(C_RUNTIME_DIR)/calynda_runtime.c $(C_RUNTIME_DIR)/calynda_runtime.h $(C_RUNTIME_DIR)/calynda_gc.h $(C_RUNTIME_DIR)/calynda_wpad.h | $(BUILD_DIR)
+	$(CC) $(CFLAGS) -c $< -o $@
+
+$(BUILD_DIR)/calynda_wpad.o: $(C_RUNTIME_DIR)/calynda_wpad.c $(C_RUNTIME_DIR)/calynda_wpad.h $(C_RUNTIME_DIR)/calynda_runtime.h | $(BUILD_DIR)
 	$(CC) $(CFLAGS) -c $< -o $@
 
 $(BUILD_DIR)/dump_ast.o: $(CLI_DIR)/dump_ast.c $(AST_DIR)/ast_dump.h $(PARSER_DIR)/parser.h $(AST_DIR)/ast.h $(TOKENIZER_DIR)/tokenizer.h | $(BUILD_DIR)
@@ -477,10 +480,13 @@ install: $(CALYNDA_BIN) host-runtime wii-runtime
 $(HOST_RT_DIR):
 	mkdir -p $(HOST_RT_DIR)
 
-$(HOST_RT_DIR)/calynda_runtime.o: $(C_RUNTIME_DIR)/calynda_runtime.c $(C_RUNTIME_DIR)/calynda_runtime.h $(C_RUNTIME_DIR)/calynda_gc.h | $(HOST_RT_DIR)
+$(HOST_RT_DIR)/calynda_runtime.o: $(C_RUNTIME_DIR)/calynda_runtime.c $(C_RUNTIME_DIR)/calynda_runtime.h $(C_RUNTIME_DIR)/calynda_gc.h $(C_RUNTIME_DIR)/calynda_wpad.h | $(HOST_RT_DIR)
 	$(CC) -Wall -std=c11 -O2 -I$(C_RUNTIME_DIR) -c $< -o $@
 
 $(HOST_RT_DIR)/calynda_gc_refcount.o: $(C_RUNTIME_DIR)/calynda_gc_refcount.c $(C_RUNTIME_DIR)/calynda_gc.h | $(HOST_RT_DIR)
+	$(CC) -Wall -std=c11 -O2 -I$(C_RUNTIME_DIR) -c $< -o $@
+
+$(HOST_RT_DIR)/calynda_wpad.o: $(C_RUNTIME_DIR)/calynda_wpad.c $(C_RUNTIME_DIR)/calynda_wpad.h $(C_RUNTIME_DIR)/calynda_runtime.h | $(HOST_RT_DIR)
 	$(CC) -Wall -std=c11 -O2 -I$(C_RUNTIME_DIR) -c $< -o $@
 
 $(HOST_RT_DIR)/libcalynda_runtime.a: $(HOST_RT_OBJS)
@@ -489,6 +495,7 @@ $(HOST_RT_DIR)/libcalynda_runtime.a: $(HOST_RT_OBJS)
 host-runtime: $(HOST_RT_DIR)/libcalynda_runtime.a
 	cp $(C_RUNTIME_DIR)/calynda_runtime.h $(HOST_RT_DIR)/
 	cp $(C_RUNTIME_DIR)/calynda_gc.h $(HOST_RT_DIR)/
+	cp $(C_RUNTIME_DIR)/calynda_wpad.h $(HOST_RT_DIR)/
 
 # ---------------------------------------------------------------
 # Wii runtime (cross-compiled with devkitPPC)
@@ -496,11 +503,14 @@ host-runtime: $(HOST_RT_DIR)/libcalynda_runtime.a
 $(WII_RT_DIR):
 	mkdir -p $(WII_RT_DIR)
 
-$(WII_RT_DIR)/calynda_runtime.o: $(C_RUNTIME_DIR)/calynda_runtime.c $(C_RUNTIME_DIR)/calynda_runtime.h $(C_RUNTIME_DIR)/calynda_gc.h | $(WII_RT_DIR)
+$(WII_RT_DIR)/calynda_runtime.o: $(C_RUNTIME_DIR)/calynda_runtime.c $(C_RUNTIME_DIR)/calynda_runtime.h $(C_RUNTIME_DIR)/calynda_gc.h $(C_RUNTIME_DIR)/calynda_wpad.h | $(WII_RT_DIR)
 	$(WII_CC) $(WII_CFLAGS) $(WII_OGCINC) -c $< -o $@
 
 $(WII_RT_DIR)/calynda_gc_refcount.o: $(C_RUNTIME_DIR)/calynda_gc_refcount.c $(C_RUNTIME_DIR)/calynda_gc.h | $(WII_RT_DIR)
 	$(WII_CC) $(WII_CFLAGS) -c $< -o $@
+
+$(WII_RT_DIR)/calynda_wpad.o: $(C_RUNTIME_DIR)/calynda_wpad.c $(C_RUNTIME_DIR)/calynda_wpad.h $(C_RUNTIME_DIR)/calynda_runtime.h | $(WII_RT_DIR)
+	$(WII_CC) $(WII_CFLAGS) $(WII_OGCINC) -DCALYNDA_WII_BUILD -c $< -o $@
 
 $(WII_RT_DIR)/calynda_wii_io.o: $(C_RUNTIME_DIR)/calynda_wii_io.c $(C_RUNTIME_DIR)/calynda_wii_io.h | $(WII_RT_DIR)
 	$(WII_CC) $(WII_CFLAGS) $(WII_OGCINC) -c $< -o $@
@@ -515,6 +525,7 @@ wii-runtime: $(WII_RT_DIR)/libcalynda_runtime.a
 	cp $(C_RUNTIME_DIR)/calynda_runtime.h $(WII_RT_DIR)/
 	cp $(C_RUNTIME_DIR)/calynda_gc.h $(WII_RT_DIR)/
 	cp $(C_RUNTIME_DIR)/calynda_wii_io.h $(WII_RT_DIR)/
+	cp $(C_RUNTIME_DIR)/calynda_wpad.h $(WII_RT_DIR)/
 
 clean:
 	rm -rf $(BUILD_DIR)

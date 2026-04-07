@@ -80,6 +80,35 @@ const TypeCheckInfo *tc_resolve_symbol_info(TypeChecker *checker,
     }
 
     if (entry->is_resolving) {
+        /* Allow self-recursion for bindings whose initializer is a lambda.
+         * Return tentative callable info so the recursive call can
+         * type-check; the actual return type is filled in once the
+         * lambda body finishes. */
+        const AstExpression *rec_init = NULL;
+
+        if (symbol->kind == SYMBOL_KIND_TOP_LEVEL_BINDING) {
+            const AstBindingDecl *bd =
+                (const AstBindingDecl *)symbol->declaration;
+            if (bd->initializer &&
+                bd->initializer->kind == AST_EXPR_LAMBDA) {
+                rec_init = bd->initializer;
+            }
+        } else if (symbol->kind == SYMBOL_KIND_LOCAL) {
+            const AstLocalBindingStatement *lb =
+                (const AstLocalBindingStatement *)symbol->declaration;
+            if (lb->initializer &&
+                lb->initializer->kind == AST_EXPR_LAMBDA) {
+                rec_init = lb->initializer;
+            }
+        }
+
+        if (rec_init) {
+            entry->info = tc_type_check_info_make_callable(
+                tc_checked_type_external(),
+                &rec_init->as.lambda.parameters);
+            return &entry->info;
+        }
+
         tc_set_error_at(checker, symbol->declaration_span, NULL,
                         "Circular definition involving '%s'.",
                         symbol->name ? symbol->name : "<anonymous>");

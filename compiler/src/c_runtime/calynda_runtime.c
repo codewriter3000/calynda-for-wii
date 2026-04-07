@@ -7,6 +7,7 @@
  */
 
 #include "calynda_runtime.h"
+#include "calynda_wpad.h"
 #include "calynda_gc.h"
 
 #include <inttypes.h>
@@ -250,7 +251,8 @@ const CalyndaRtObjectHeader *calynda_rt_as_object(CalyndaRtWord word) {
         return NULL;
     }
     if (ptr == (const void *)&__calynda_pkg_stdlib ||
-        ptr == (const void *)&STDOUT_PRINT_CALLABLE) {
+        ptr == (const void *)&STDOUT_PRINT_CALLABLE ||
+        ptr == (const void *)&__calynda_pkg_wpad) {
         return (const CalyndaRtObjectHeader *)ptr;
     }
     if (!registry_contains(ptr)) {
@@ -590,10 +592,14 @@ CalyndaRtWord __calynda_rt_call_callable(CalyndaRtWord callable,
 
         return cl->entry(cl->captures, cl->capture_count, arguments, argument_count);
     }
-    case CALYNDA_RT_OBJECT_EXTERN_CALLABLE:
-        return rt_dispatch_extern_callable(
-            (const CalyndaRtExternCallable *)(const void *)h,
-            argument_count, arguments);
+    case CALYNDA_RT_OBJECT_EXTERN_CALLABLE: {
+        const CalyndaRtExternCallable *ec =
+            (const CalyndaRtExternCallable *)(const void *)h;
+        if ((int)ec->kind >= 100) {
+            return calynda_wpad_dispatch(ec, argument_count, arguments);
+        }
+        return rt_dispatch_extern_callable(ec, argument_count, arguments);
+    }
     default:
         fprintf(stderr, "runtime: object of kind %s is not callable\n",
                 calynda_rt_object_kind_name((CalyndaRtObjectKind)h->kind));
@@ -614,6 +620,10 @@ CalyndaRtWord __calynda_rt_member_load(CalyndaRtWord target, const char *member)
     }
     if (h == &__calynda_pkg_stdlib.header && strcmp(member, "print") == 0) {
         return rt_make_object_word(&STDOUT_PRINT_CALLABLE);
+    }
+    if (h == &__calynda_pkg_wpad.header) {
+        CalyndaRtWord result = calynda_wpad_member_load(member);
+        if (result != 0) return result;
     }
     fprintf(stderr, "runtime: unsupported member load .%s\n", member);
     abort();
@@ -711,6 +721,11 @@ CalyndaRtWord __calynda_rt_cast_value(CalyndaRtWord source, CalyndaRtTypeTag tar
     }
 }
 
+void calynda_rt_init(void) {
+    /* Register WPAD static objects so they pass as_object validation. */
+    calynda_wpad_register_objects();
+}
+
 int calynda_rt_start_process(CalyndaRtProgramStartEntry entry, int argc, char **argv) {
     CalyndaRtWord *elements = NULL;
     CalyndaRtWord  arguments;
@@ -722,6 +737,8 @@ int calynda_rt_start_process(CalyndaRtProgramStartEntry entry, int argc, char **
         fprintf(stderr, "runtime: missing native start entry\n");
         return 70;
     }
+
+    calynda_rt_init();
 
     if (argc > 1) {
         argument_count = (size_t)(argc - 1);

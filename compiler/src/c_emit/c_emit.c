@@ -251,6 +251,7 @@ static bool emit_main(CEmitContext *ctx, bool has_init_globals, bool has_boot) {
     if (has_boot) {
         fputs("int calynda_program_main(int argc, char **argv)\n{\n", out);
         fputs("    (void)argc; (void)argv;\n", out);
+        fputs("    calynda_rt_init();\n", out);
         if (has_init_globals) {
             fputs("    __calynda_init_globals();\n", out);
         }

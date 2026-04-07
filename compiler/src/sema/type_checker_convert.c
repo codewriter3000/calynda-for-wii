@@ -151,7 +151,7 @@ bool tc_merge_types_for_inference(CheckedType left, CheckedType right,
         return true;
     }
 
-    if (left.kind == CHECKED_TYPE_EXTERNAL && right.kind == CHECKED_TYPE_EXTERNAL) {
+    if (left.kind == CHECKED_TYPE_EXTERNAL || right.kind == CHECKED_TYPE_EXTERNAL) {
         *merged = tc_checked_type_external();
         return true;
     }

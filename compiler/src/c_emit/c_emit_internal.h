@@ -12,6 +12,8 @@
 typedef struct {
     const HirLambdaExpression *lambda;
     int                        id;
+    /* Name of the top-level binding that owns this lambda (may be NULL). */
+    const char                *owner_binding_name;
 } CEmitLambdaEntry;
 
 typedef struct {
@@ -28,6 +30,8 @@ typedef struct {
     const char        *source_file;
     /* True when emitting inside a boot() function (void return) */
     bool               is_boot_context;
+    /* Set during prescan to propagate binding name into lambda entries */
+    const char        *prescan_owner_binding;
 } CEmitContext;
 
 /* c_emit_names.c */

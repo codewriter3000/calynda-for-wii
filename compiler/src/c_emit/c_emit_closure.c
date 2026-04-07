@@ -7,7 +7,8 @@
 /* Lambda pre-scan: walk HIR to collect all lambda expressions          */
 /* ------------------------------------------------------------------ */
 
-static bool prescan_register(CEmitContext *ctx, const HirLambdaExpression *lambda) {
+static bool prescan_register(CEmitContext *ctx, const HirLambdaExpression *lambda,
+                             const char *owner_binding_name) {
     CEmitLambdaEntry *resized;
     size_t            new_cap;
 
@@ -22,6 +23,7 @@ static bool prescan_register(CEmitContext *ctx, const HirLambdaExpression *lambd
     }
     ctx->lambdas[ctx->lambda_count].lambda = lambda;
     ctx->lambdas[ctx->lambda_count].id     = ctx->lambda_counter++;
+    ctx->lambdas[ctx->lambda_count].owner_binding_name = owner_binding_name;
     ctx->lambda_count++;
     return true;
 }
@@ -35,11 +37,21 @@ bool c_emit_prescan_expr(CEmitContext *ctx, const HirExpression *expr) {
 
     switch (expr->kind) {
     case HIR_EXPR_LAMBDA:
-        if (!prescan_register(ctx, &expr->as.lambda)) {
+        if (!prescan_register(ctx, &expr->as.lambda,
+                              ctx->prescan_owner_binding)) {
             return false;
         }
-        /* Recurse into lambda body */
-        return c_emit_prescan_block(ctx, expr->as.lambda.body);
+        /* Nested lambdas do not own the same binding */
+        {
+            const char *saved = ctx->prescan_owner_binding;
+            ctx->prescan_owner_binding = NULL;
+            if (!c_emit_prescan_block(ctx, expr->as.lambda.body)) {
+                ctx->prescan_owner_binding = saved;
+                return false;
+            }
+            ctx->prescan_owner_binding = saved;
+        }
+        return true;
 
     case HIR_EXPR_BINARY:
         return c_emit_prescan_expr(ctx, expr->as.binary.left) &&
@@ -162,9 +174,12 @@ bool c_emit_prescan_program(CEmitContext *ctx, const HirProgram *program) {
         }
         switch (decl->kind) {
         case HIR_TOP_LEVEL_BINDING:
+            ctx->prescan_owner_binding = decl->as.binding.name;
             if (!c_emit_prescan_expr(ctx, decl->as.binding.initializer)) {
+                ctx->prescan_owner_binding = NULL;
                 return false;
             }
+            ctx->prescan_owner_binding = NULL;
             break;
         case HIR_TOP_LEVEL_START:
             if (!c_emit_prescan_block(ctx, decl->as.start.body)) {
@@ -196,6 +211,48 @@ int c_emit_lambda_id(const CEmitContext *ctx, const HirLambdaExpression *lambda)
 }
 
 /* ------------------------------------------------------------------ */
+/* Tail-call detection for self-recursive lambdas                       */
+/* ------------------------------------------------------------------ */
+
+/*
+ * Check whether the last statement in a lambda body is an expression
+ * statement that calls the same binding that owns this lambda.
+ * Returns the call expression if it is a tail-recursive call, NULL otherwise.
+ */
+static const HirCallExpression *
+detect_tail_recursive_call(const HirBlock *body, const char *owner_name) {
+    const HirStatement  *last;
+    const HirExpression *expr;
+    const HirExpression *callee;
+
+    if (!body || body->statement_count == 0 || !owner_name) {
+        return NULL;
+    }
+
+    last = body->statements[body->statement_count - 1];
+    if (!last || last->kind != HIR_STMT_EXPRESSION) {
+        return NULL;
+    }
+
+    expr = last->as.expression;
+    if (!expr || expr->kind != HIR_EXPR_CALL) {
+        return NULL;
+    }
+
+    callee = expr->as.call.callee;
+    if (!callee || callee->kind != HIR_EXPR_SYMBOL) {
+        return NULL;
+    }
+
+    if (callee->as.symbol.name &&
+        strcmp(callee->as.symbol.name, owner_name) == 0) {
+        return &expr->as.call;
+    }
+
+    return NULL;
+}
+
+/* ------------------------------------------------------------------ */
 /* Emit all collected lambda functions                                  */
 /* ------------------------------------------------------------------ */
 
@@ -206,6 +263,10 @@ bool c_emit_lambda_functions(CEmitContext *ctx) {
         const CEmitLambdaEntry     *entry  = &ctx->lambdas[i];
         const HirLambdaExpression  *lambda = entry->lambda;
         int                         id     = entry->id;
+        const HirCallExpression    *tail_call;
+
+        tail_call = detect_tail_recursive_call(lambda->body,
+                                               entry->owner_binding_name);
 
         /* Emit the C function signature */
         fprintf(ctx->out,
@@ -233,9 +294,47 @@ bool c_emit_lambda_functions(CEmitContext *ctx) {
                     "    (void)__argument_count;\n");
         }
 
-        /* Emit body */
-        if (!c_emit_block(ctx, lambda->body)) {
-            return false;
+        if (tail_call) {
+            /* Self-recursive tail call detected — emit as for(;;) loop.
+             * All statements except the last are emitted normally inside
+             * the loop body, and the tail call is replaced by parameter
+             * reassignment + continue. */
+            size_t body_count = lambda->body->statement_count;
+
+            fputs("    for (;;) {\n", ctx->out);
+
+            /* Emit all statements except the last (the tail call) */
+            for (j = 0; j + 1 < body_count; j++) {
+                if (!c_emit_stmt(ctx, lambda->body->statements[j])) {
+                    return false;
+                }
+            }
+
+            /* Re-assign parameters from the tail-call arguments */
+            if (tail_call->argument_count > 0 &&
+                lambda->parameters.count > 0) {
+                size_t k;
+                size_t limit = tail_call->argument_count < lambda->parameters.count
+                             ? tail_call->argument_count
+                             : lambda->parameters.count;
+
+                for (k = 0; k < limit; k++) {
+                    fputs("    ", ctx->out);
+                    c_emit_global_name(ctx->out, lambda->parameters.items[k].name);
+                    fputs(" = ", ctx->out);
+                    if (!c_emit_expr(ctx, tail_call->arguments[k])) {
+                        return false;
+                    }
+                    fputs(";\n", ctx->out);
+                }
+            }
+
+            fputs("    } /* tail-call loop */\n", ctx->out);
+        } else {
+            /* Normal (non-recursive) lambda body */
+            if (!c_emit_block(ctx, lambda->body)) {
+                return false;
+            }
         }
 
         fprintf(ctx->out, "    return (CalyndaRtWord)0;\n");

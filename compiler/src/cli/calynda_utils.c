@@ -163,7 +163,10 @@ int calynda_run_c_compiler(const char *c_source_path,
                    lib_flag,
                    ogc_lib_flag,
                    "-lcalynda_runtime",
+                   "-lwiiuse",
+                   "-lbte",
                    "-logc",
+                   "-lm",
                    "-mrvl", "-mcpu=750", "-meabi", "-mhard-float",
                    (char *)NULL);
         } else {
