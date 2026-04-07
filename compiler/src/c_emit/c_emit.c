@@ -228,24 +228,38 @@ static bool emit_boot_function(CEmitContext *ctx, const HirProgram *program) {
 static bool emit_main(CEmitContext *ctx, bool has_init_globals, bool has_boot) {
     FILE *out = ctx->out;
 
+    /*
+     * Emit the entry point as calynda_program_main().  On the host target
+     * (no external main wrapper) a small #ifndef block generates the real
+     * main() that simply delegates to calynda_program_main().  On Wii/GC
+     * targets the calynda_wii_main.o object provides main() and calls
+     * calynda_program_main() after initialising the console.
+     */
     if (has_boot) {
-        /* Boot programs use a simple main that calls __calynda_boot */
-        fputs("int main(int argc, char **argv)\n{\n", out);
+        fputs("int calynda_program_main(int argc, char **argv)\n{\n", out);
         fputs("    (void)argc; (void)argv;\n", out);
         if (has_init_globals) {
             fputs("    __calynda_init_globals();\n", out);
         }
         fputs("    __calynda_boot();\n", out);
         fputs("    return 0;\n", out);
-        fputs("}\n", out);
+        fputs("}\n\n", out);
     } else {
-        fputs("int main(int argc, char **argv)\n{\n", out);
+        fputs("int calynda_program_main(int argc, char **argv)\n{\n", out);
         if (has_init_globals) {
             fputs("    __calynda_init_globals();\n", out);
         }
         fputs("    return calynda_rt_start_process(__calynda_start, argc, argv);\n", out);
-        fputs("}\n", out);
+        fputs("}\n\n", out);
     }
+
+    /* Fallback main() for host builds where no external wrapper is linked. */
+    fputs("#ifndef CALYNDA_WII_BUILD\n", out);
+    fputs("int main(int argc, char **argv)\n{\n", out);
+    fputs("    return calynda_program_main(argc, argv);\n", out);
+    fputs("}\n", out);
+    fputs("#endif\n", out);
+
     return true;
 }
 

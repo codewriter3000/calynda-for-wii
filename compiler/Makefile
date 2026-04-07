@@ -77,10 +77,24 @@ DUMP_AST_BIN       = $(BUILD_DIR)/dump_ast
 DUMP_SEMANTICS_BIN = $(BUILD_DIR)/dump_semantics
 CALYNDA_BIN        = $(BUILD_DIR)/calynda
 
+# Cross-compiler for Wii/GC targets
+WII_CC     = powerpc-eabi-gcc
+WII_CFLAGS = -Wall -std=c11 -O2 -mrvl -mcpu=750 -meabi -mhard-float -I$(C_RUNTIME_DIR)
+WII_OGCINC = -I$(DEVKITPRO)/libogc/include
+WII_OGCLIB = -L$(DEVKITPRO)/libogc/lib/wii
+
+# Per-target runtime output directories
+HOST_RT_DIR = $(BUILD_DIR)/host
+WII_RT_DIR  = $(BUILD_DIR)/wii
+
+# Per-target runtime objects
+HOST_RT_OBJS = $(HOST_RT_DIR)/calynda_runtime.o $(HOST_RT_DIR)/calynda_gc_refcount.o
+WII_RT_OBJS  = $(WII_RT_DIR)/calynda_runtime.o $(WII_RT_DIR)/calynda_gc_refcount.o $(WII_RT_DIR)/calynda_wii_io.o $(WII_RT_DIR)/calynda_wii_main.o
+
 PREFIX ?= /usr/local
 INSTALL_BIN_DIR ?= $(PREFIX)/bin
 
-.PHONY: all clean test dump_ast dump_semantics calynda install
+.PHONY: all clean test dump_ast dump_semantics calynda install host-runtime wii-runtime
 
 all: test
 
@@ -451,11 +465,56 @@ dump_ast: $(DUMP_AST_BIN)
 
 dump_semantics: $(DUMP_SEMANTICS_BIN)
 
-calynda: $(CALYNDA_BIN)
+calynda: $(CALYNDA_BIN) host-runtime wii-runtime
 
-install: $(CALYNDA_BIN)
+install: $(CALYNDA_BIN) host-runtime wii-runtime
 	mkdir -p $(INSTALL_BIN_DIR)
 	install -m 755 $(CALYNDA_BIN) $(INSTALL_BIN_DIR)/calynda
+
+# ---------------------------------------------------------------
+# Host runtime
+# ---------------------------------------------------------------
+$(HOST_RT_DIR):
+	mkdir -p $(HOST_RT_DIR)
+
+$(HOST_RT_DIR)/calynda_runtime.o: $(C_RUNTIME_DIR)/calynda_runtime.c $(C_RUNTIME_DIR)/calynda_runtime.h $(C_RUNTIME_DIR)/calynda_gc.h | $(HOST_RT_DIR)
+	$(CC) -Wall -std=c11 -O2 -I$(C_RUNTIME_DIR) -c $< -o $@
+
+$(HOST_RT_DIR)/calynda_gc_refcount.o: $(C_RUNTIME_DIR)/calynda_gc_refcount.c $(C_RUNTIME_DIR)/calynda_gc.h | $(HOST_RT_DIR)
+	$(CC) -Wall -std=c11 -O2 -I$(C_RUNTIME_DIR) -c $< -o $@
+
+$(HOST_RT_DIR)/libcalynda_runtime.a: $(HOST_RT_OBJS)
+	ar rcs $@ $^
+
+host-runtime: $(HOST_RT_DIR)/libcalynda_runtime.a
+	cp $(C_RUNTIME_DIR)/calynda_runtime.h $(HOST_RT_DIR)/
+	cp $(C_RUNTIME_DIR)/calynda_gc.h $(HOST_RT_DIR)/
+
+# ---------------------------------------------------------------
+# Wii runtime (cross-compiled with devkitPPC)
+# ---------------------------------------------------------------
+$(WII_RT_DIR):
+	mkdir -p $(WII_RT_DIR)
+
+$(WII_RT_DIR)/calynda_runtime.o: $(C_RUNTIME_DIR)/calynda_runtime.c $(C_RUNTIME_DIR)/calynda_runtime.h $(C_RUNTIME_DIR)/calynda_gc.h | $(WII_RT_DIR)
+	$(WII_CC) $(WII_CFLAGS) $(WII_OGCINC) -c $< -o $@
+
+$(WII_RT_DIR)/calynda_gc_refcount.o: $(C_RUNTIME_DIR)/calynda_gc_refcount.c $(C_RUNTIME_DIR)/calynda_gc.h | $(WII_RT_DIR)
+	$(WII_CC) $(WII_CFLAGS) -c $< -o $@
+
+$(WII_RT_DIR)/calynda_wii_io.o: $(C_RUNTIME_DIR)/calynda_wii_io.c $(C_RUNTIME_DIR)/calynda_wii_io.h | $(WII_RT_DIR)
+	$(WII_CC) $(WII_CFLAGS) $(WII_OGCINC) -c $< -o $@
+
+$(WII_RT_DIR)/calynda_wii_main.o: $(C_RUNTIME_DIR)/calynda_wii_main.c $(C_RUNTIME_DIR)/calynda_wii_io.h $(C_RUNTIME_DIR)/calynda_runtime.h | $(WII_RT_DIR)
+	$(WII_CC) $(WII_CFLAGS) $(WII_OGCINC) -c $< -o $@
+
+$(WII_RT_DIR)/libcalynda_runtime.a: $(WII_RT_OBJS)
+	$(DEVKITPPC)/bin/powerpc-eabi-ar rcs $@ $^
+
+wii-runtime: $(WII_RT_DIR)/libcalynda_runtime.a
+	cp $(C_RUNTIME_DIR)/calynda_runtime.h $(WII_RT_DIR)/
+	cp $(C_RUNTIME_DIR)/calynda_gc.h $(WII_RT_DIR)/
+	cp $(C_RUNTIME_DIR)/calynda_wii_io.h $(WII_RT_DIR)/
 
 clean:
 	rm -rf $(BUILD_DIR)

@@ -22,6 +22,7 @@ int calynda_run_c_compiler(const char *c_source_path,
                            const char *runtime_lib_dir,
                            const char *output_path,
                            const char *target);
+int calynda_run_elf2dol(const char *elf_path, const char *dol_path);
 int calynda_run_child_process(const char *path, char *const argv[]);
 
 #endif

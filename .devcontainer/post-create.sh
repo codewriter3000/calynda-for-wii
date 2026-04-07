@@ -9,8 +9,8 @@ echo "=== Verifying Dolphin ==="
 dolphin-emu --version || echo "Dolphin installed (version flag may not be supported)"
 
 echo ""
-echo "=== Building compiler ==="
-make -C compiler all
+echo "=== Building compiler + runtime libraries ==="
+make -C compiler calynda
 
 echo ""
 echo "=== Running compiler tests ==="

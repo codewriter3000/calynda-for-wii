@@ -124,6 +124,9 @@ int calynda_run_c_compiler(const char *c_source_path,
     int status;
     char lib_flag[PATH_MAX + 3];
     char inc_flag[PATH_MAX + 3];
+    char ogc_inc_flag[PATH_MAX + 32];
+    char ogc_lib_flag[PATH_MAX + 32];
+    const char *devkitpro;
 
     if (!c_source_path || !runtime_include_dir || !runtime_lib_dir ||
         !output_path || !target) {
@@ -133,34 +136,34 @@ int calynda_run_c_compiler(const char *c_source_path,
     snprintf(inc_flag, sizeof(inc_flag), "-I%s", runtime_include_dir);
     snprintf(lib_flag, sizeof(lib_flag), "-L%s", runtime_lib_dir);
 
+    /* Resolve DEVKITPRO for libogc paths. */
+    devkitpro = getenv("DEVKITPRO");
+    if (!devkitpro) {
+        devkitpro = "/opt/devkitpro";
+    }
+    snprintf(ogc_inc_flag, sizeof(ogc_inc_flag), "-I%s/libogc/include", devkitpro);
+    snprintf(ogc_lib_flag, sizeof(ogc_lib_flag), "-L%s/libogc/lib/wii", devkitpro);
+
     child = fork();
     if (child < 0) {
         return -1;
     }
 
     if (child == 0) {
-        if (strcmp(target, "wii") == 0) {
+        if (strcmp(target, "wii") == 0 || strcmp(target, "gc") == 0) {
             char output_elf[PATH_MAX];
             snprintf(output_elf, sizeof(output_elf), "%s.elf", output_path);
             execlp("powerpc-eabi-gcc",
                    "powerpc-eabi-gcc",
+                   "-DCALYNDA_WII_BUILD",
                    "-o", output_elf,
                    c_source_path,
                    inc_flag,
-                   "-lcalynda_runtime",
+                   ogc_inc_flag,
                    lib_flag,
-                   "-mrvl", "-mcpu=750", "-meabi", "-mhard-float",
-                   (char *)NULL);
-        } else if (strcmp(target, "gc") == 0) {
-            char output_dol[PATH_MAX];
-            snprintf(output_dol, sizeof(output_dol), "%s.dol", output_path);
-            execlp("powerpc-eabi-gcc",
-                   "powerpc-eabi-gcc",
-                   "-o", output_dol,
-                   c_source_path,
-                   inc_flag,
+                   ogc_lib_flag,
                    "-lcalynda_runtime",
-                   lib_flag,
+                   "-logc",
                    "-mrvl", "-mcpu=750", "-meabi", "-mhard-float",
                    (char *)NULL);
         } else {
@@ -173,6 +176,38 @@ int calynda_run_c_compiler(const char *c_source_path,
                    lib_flag,
                    (char *)NULL);
         }
+        _exit(127);
+    }
+
+    if (waitpid(child, &status, 0) < 0) {
+        return -1;
+    }
+    if (WIFEXITED(status)) {
+        return WEXITSTATUS(status);
+    }
+
+    return -1;
+}
+
+int calynda_run_elf2dol(const char *elf_path, const char *dol_path) {
+    pid_t child;
+    int status;
+
+    if (!elf_path || !dol_path) {
+        return -1;
+    }
+
+    child = fork();
+    if (child < 0) {
+        return -1;
+    }
+
+    if (child == 0) {
+        execlp("elf2dol",
+               "elf2dol",
+               elf_path,
+               dol_path,
+               (char *)NULL);
         _exit(127);
     }
 

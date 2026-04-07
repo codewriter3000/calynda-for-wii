@@ -115,10 +115,10 @@ require_command gcc
 
 BUILD_DIR=$SCRIPT_DIR/build
 SOURCE_BIN=$BUILD_DIR/calynda
-SOURCE_RUNTIME=$BUILD_DIR/runtime.o
+SOURCE_HOST_RT=$BUILD_DIR/host
+SOURCE_WII_RT=$BUILD_DIR/wii
 INSTALL_ROOT=$LIB_DIR/calynda
 INSTALL_BIN=$INSTALL_ROOT/calynda
-INSTALL_RUNTIME=$INSTALL_ROOT/runtime.o
 LAUNCHER_PATH=$BIN_DIR/calynda
 
 printf '==> Building Calynda\n'
@@ -129,15 +129,28 @@ if [ ! -f "$SOURCE_BIN" ]; then
     exit 1
 fi
 
-if [ ! -f "$SOURCE_RUNTIME" ]; then
-    printf 'error: build did not produce %s\n' "$SOURCE_RUNTIME" >&2
+if [ ! -f "$SOURCE_HOST_RT/libcalynda_runtime.a" ]; then
+    printf 'error: build did not produce host runtime at %s\n' "$SOURCE_HOST_RT" >&2
     exit 1
 fi
 
 printf '==> Installing files\n'
-install -d "$BIN_DIR" "$INSTALL_ROOT"
+install -d "$BIN_DIR" "$INSTALL_ROOT" "$INSTALL_ROOT/host" "$INSTALL_ROOT/wii"
 install -m 755 "$SOURCE_BIN" "$INSTALL_BIN"
-install -m 644 "$SOURCE_RUNTIME" "$INSTALL_RUNTIME"
+
+install -m 644 "$SOURCE_HOST_RT/libcalynda_runtime.a" "$INSTALL_ROOT/host/"
+install -m 644 "$SOURCE_HOST_RT/calynda_runtime.h" "$INSTALL_ROOT/host/"
+install -m 644 "$SOURCE_HOST_RT/calynda_gc.h" "$INSTALL_ROOT/host/"
+
+if [ -f "$SOURCE_WII_RT/libcalynda_runtime.a" ]; then
+    install -m 644 "$SOURCE_WII_RT/libcalynda_runtime.a" "$INSTALL_ROOT/wii/"
+    install -m 644 "$SOURCE_WII_RT/calynda_runtime.h" "$INSTALL_ROOT/wii/"
+    install -m 644 "$SOURCE_WII_RT/calynda_gc.h" "$INSTALL_ROOT/wii/"
+    install -m 644 "$SOURCE_WII_RT/calynda_wii_io.h" "$INSTALL_ROOT/wii/"
+    printf '  wii runtime: %s/wii/\n' "$INSTALL_ROOT"
+else
+    printf '  wii runtime: skipped (devkitPPC not found during build)\n'
+fi
 
 cat > "$LAUNCHER_PATH" <<EOF
 #!/usr/bin/env sh
@@ -146,9 +159,9 @@ EOF
 chmod 755 "$LAUNCHER_PATH"
 
 printf '\nInstalled Calynda:\n'
-printf '  launcher: %s\n' "$LAUNCHER_PATH"
-printf '  binary:   %s\n' "$INSTALL_BIN"
-printf '  runtime:  %s\n' "$INSTALL_RUNTIME"
+printf '  launcher:      %s\n' "$LAUNCHER_PATH"
+printf '  binary:        %s\n' "$INSTALL_BIN"
+printf '  host runtime:  %s/host/\n' "$INSTALL_ROOT"
 
 case ":${PATH}:" in
     *":$BIN_DIR:"*)

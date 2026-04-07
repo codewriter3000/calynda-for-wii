@@ -5,6 +5,10 @@ compiler/build/
 *.o
 *.obj
 
+# Wii build artifacts
+*.elf
+*.dol
+
 # Executables
 *.exe
 *.out

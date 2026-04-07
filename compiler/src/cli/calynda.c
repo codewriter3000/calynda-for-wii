@@ -128,10 +128,14 @@ static int build_program_file(const char *source_path,
                               const char *output_path,
                               const char *target) {
     char c_path[PATH_MAX];
+    char exe_dir[PATH_MAX];
     char include_dir[PATH_MAX];
     char lib_dir[PATH_MAX];
     int exit_code;
     FILE *c_file;
+    bool is_wii;
+
+    is_wii = (strcmp(target, "wii") == 0 || strcmp(target, "gc") == 0);
 
     /* Write generated C to a temp file */
     {
@@ -162,11 +166,19 @@ static int build_program_file(const char *source_path,
         return exit_code;
     }
 
-    /* Resolve runtime paths relative to the calynda executable */
-    if (!calynda_executable_directory(include_dir, sizeof(include_dir))) {
-        strcpy(include_dir, "build");
+    /* Resolve runtime paths relative to the calynda executable.
+     * Host builds use <exe_dir>/host/, Wii/GC builds use <exe_dir>/wii/. */
+    if (!calynda_executable_directory(exe_dir, sizeof(exe_dir))) {
+        strcpy(exe_dir, "build");
     }
-    memcpy(lib_dir, include_dir, strlen(include_dir) + 1);
+
+    if (is_wii) {
+        snprintf(include_dir, sizeof(include_dir), "%s/wii", exe_dir);
+        snprintf(lib_dir, sizeof(lib_dir), "%s/wii", exe_dir);
+    } else {
+        snprintf(include_dir, sizeof(include_dir), "%s/host", exe_dir);
+        snprintf(lib_dir, sizeof(lib_dir), "%s/host", exe_dir);
+    }
 
     exit_code = calynda_run_c_compiler(c_path, include_dir, lib_dir, output_path, target);
     if (exit_code != 0) {
@@ -177,6 +189,22 @@ static int build_program_file(const char *source_path,
     }
 
     unlink(c_path);
+
+    /* For Wii/GC targets, convert ELF to DOL. */
+    if (is_wii) {
+        char elf_path[PATH_MAX];
+        char dol_path[PATH_MAX];
+        snprintf(elf_path, sizeof(elf_path), "%s.elf", output_path);
+        snprintf(dol_path, sizeof(dol_path), "%s.dol", output_path);
+        exit_code = calynda_run_elf2dol(elf_path, dol_path);
+        if (exit_code != 0) {
+            fprintf(stderr,
+                    "%s: elf2dol conversion failed (exit %d). ELF preserved at %s\n",
+                    source_path, exit_code, elf_path);
+            return 1;
+        }
+    }
+
     return 0;
 }
 
