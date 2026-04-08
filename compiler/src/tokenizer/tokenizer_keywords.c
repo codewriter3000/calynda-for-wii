@@ -53,6 +53,8 @@ static const Keyword keywords[] = {
     {"int",      TOK_INT},
     {"uint",     TOK_UINT},
     {"float",    TOK_FLOAT},
+    {"component", TOK_COMPONENT},
+    {"signal",   TOK_SIGNAL},
     {NULL, TOK_EOF}
 };
 

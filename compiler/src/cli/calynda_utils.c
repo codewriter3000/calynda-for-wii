@@ -152,29 +152,45 @@ int calynda_run_c_compiler(const char *c_source_path,
     if (child == 0) {
         if (strcmp(target, "wii") == 0 || strcmp(target, "gc") == 0) {
             char output_elf[PATH_MAX];
+            char portlibs_flag[PATH_MAX + 32];
+            char font_obj[PATH_MAX + 32];
             snprintf(output_elf, sizeof(output_elf), "%s.elf", output_path);
-            execlp("powerpc-eabi-gcc",
-                   "powerpc-eabi-gcc",
-                   "-DCALYNDA_WII_BUILD",
-                   "-o", output_elf,
-                   c_source_path,
-                   inc_flag,
-                   ogc_inc_flag,
-                   lib_flag,
-                   ogc_lib_flag,
-                   "-lcalynda_runtime",
-                   "-lwiiuse",
-                   "-lbte",
-                   "-logc",
-                   "-lm",
-                   "-mrvl", "-mcpu=750", "-meabi", "-mhard-float",
-                   (char *)NULL);
+            snprintf(portlibs_flag, sizeof(portlibs_flag),
+                     "-L%s/portlibs/ppc/lib", devkitpro);
+            snprintf(font_obj, sizeof(font_obj),
+                     "%s/font.ttf.o", runtime_lib_dir);
+            const char *argv[] = {
+                "powerpc-eabi-g++",
+                "-DCALYNDA_WII_BUILD",
+                "-x", "c",
+                "-o", output_elf,
+                c_source_path,
+                inc_flag,
+                ogc_inc_flag,
+                lib_flag,
+                ogc_lib_flag,
+                portlibs_flag,
+                "-lsolid_wii",
+                "-lcalynda_runtime",
+                "-lwiigui",
+                "-lfreetype",
+                "-lpng", "-lz",
+                "-lbz2", "-lbrotlidec", "-lbrotlicommon",
+                "-lvorbisidec", "-logg",
+                "-lasnd",
+                "-lwiiuse", "-lbte", "-logc",
+                "-lm",
+                "-mrvl", "-mcpu=750", "-meabi", "-mhard-float",
+                NULL
+            };
+            execvp("powerpc-eabi-g++", (char *const *)argv);
         } else {
             execlp("gcc",
                    "gcc",
                    "-o", output_path,
                    c_source_path,
                    inc_flag,
+                   "-lsolid_wii_host",
                    "-lcalynda_runtime",
                    lib_flag,
                    (char *)NULL);

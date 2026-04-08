@@ -18,6 +18,9 @@
 
 /* ---- JSX attribute ---- */
 
+/* Forward declaration for style property (defined below JsxAttribute) */
+typedef struct JsxStyleProp JsxStyleProp;
+
 typedef enum {
     JSX_ATTR_STRING,      /* name="value"           */
     JSX_ATTR_EXPRESSION,  /* name={expr}            */
@@ -36,17 +39,16 @@ typedef struct {
             size_t        count;
             size_t        capacity;
         } style;                      /* JSX_ATTR_STYLE   */
-    } as;
-    AstSourceSpan  source_span;
+    } as;    char          *raw_text;     /* raw source text for EXPRESSION/HANDLER  */    AstSourceSpan  source_span;
 } JsxAttribute;
 
 /* ---- JSX style property (within style={{ ... }}) ---- */
 
-typedef struct JsxStyleProp {
+struct JsxStyleProp {
     char          *name;         /* CSS property name (e.g. "background-color") */
     AstExpression *value;        /* value expression */
     AstSourceSpan  source_span;
-} JsxStyleProp;
+};
 
 /* ---- JSX child ---- */
 
@@ -63,6 +65,7 @@ typedef struct JsxChild {
         char              *text;         /* JSX_CHILD_TEXT       */
         AstExpression     *expression;   /* JSX_CHILD_EXPRESSION */
     } as;
+    char          *raw_text;     /* raw source text for EXPRESSION children */
     AstSourceSpan source_span;
 } JsxChild;
 

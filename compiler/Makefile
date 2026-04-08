@@ -37,7 +37,8 @@ SEMANTIC_DUMP_OBJS   = $(BUILD_DIR)/semantic_dump.o $(BUILD_DIR)/semantic_dump_b
 HIR_OBJS             = $(BUILD_DIR)/hir.o $(BUILD_DIR)/hir_memory.o $(BUILD_DIR)/hir_helpers.o $(BUILD_DIR)/hir_lower.o $(BUILD_DIR)/hir_lower_stmt.o $(BUILD_DIR)/hir_lower_expr.o $(BUILD_DIR)/hir_lower_expr_ext.o $(BUILD_DIR)/hir_lower_decls.o
 HIR_DUMP_OBJS        = $(BUILD_DIR)/hir_dump.o $(BUILD_DIR)/hir_dump_helpers.o $(BUILD_DIR)/hir_dump_expr.o $(BUILD_DIR)/hir_dump_expr_ext.o
 RUNTIME_OBJS         = $(BUILD_DIR)/runtime.o $(BUILD_DIR)/runtime_names.o $(BUILD_DIR)/runtime_format.o $(BUILD_DIR)/runtime_ops.o $(BUILD_DIR)/runtime_union.o
-C_EMIT_OBJS          = $(BUILD_DIR)/c_emit.o $(BUILD_DIR)/c_emit_type.o $(BUILD_DIR)/c_emit_names.o $(BUILD_DIR)/c_emit_expr.o $(BUILD_DIR)/c_emit_stmt.o $(BUILD_DIR)/c_emit_closure.o
+C_EMIT_OBJS          = $(BUILD_DIR)/c_emit.o $(BUILD_DIR)/c_emit_type.o $(BUILD_DIR)/c_emit_names.o $(BUILD_DIR)/c_emit_expr.o $(BUILD_DIR)/c_emit_stmt.o $(BUILD_DIR)/c_emit_closure.o $(BUILD_DIR)/calynda_jsx_emit.o $(BUILD_DIR)/c_emit_jsx_file.o
+JSX_OBJS             = $(BUILD_DIR)/calynda_jsx_tokenizer.o $(BUILD_DIR)/calynda_jsx_ast.o $(BUILD_DIR)/calynda_jsx_parser.o
 C_RUNTIME_OBJS       = $(BUILD_DIR)/calynda_gc_refcount.o $(BUILD_DIR)/calynda_runtime.o $(BUILD_DIR)/calynda_wpad.o $(BUILD_DIR)/calynda_mii.o $(BUILD_DIR)/mii.o
 DUMP_AST_OBJS        = $(BUILD_DIR)/dump_ast.o
 DUMP_SEMANTICS_OBJS  = $(BUILD_DIR)/dump_semantics.o
@@ -335,6 +336,21 @@ $(BUILD_DIR)/c_emit_stmt.o: $(C_EMIT_DIR)/c_emit_stmt.c $(C_EMIT_DIR)/c_emit_int
 $(BUILD_DIR)/c_emit_closure.o: $(C_EMIT_DIR)/c_emit_closure.c $(C_EMIT_DIR)/c_emit_internal.h $(C_EMIT_DIR)/c_emit.h $(HIR_DIR)/hir.h | $(BUILD_DIR)
 	$(CC) $(CFLAGS) -c $< -o $@
 
+$(BUILD_DIR)/calynda_jsx_emit.o: $(C_EMIT_DIR)/calynda_jsx_emit.c $(C_EMIT_DIR)/calynda_jsx_emit.h $(AST_DIR)/calynda_jsx_ast.h | $(BUILD_DIR)
+	$(CC) $(CFLAGS) -c $< -o $@
+
+$(BUILD_DIR)/c_emit_jsx_file.o: $(C_EMIT_DIR)/c_emit_jsx_file.c $(C_EMIT_DIR)/c_emit_jsx_file.h $(C_EMIT_DIR)/calynda_jsx_emit.h $(AST_DIR)/calynda_jsx_ast.h $(TOKENIZER_DIR)/calynda_jsx_tokens.h $(PARSER_DIR)/calynda_jsx_parser.h | $(BUILD_DIR)
+	$(CC) $(CFLAGS) -c $< -o $@
+
+$(BUILD_DIR)/calynda_jsx_tokenizer.o: $(TOKENIZER_DIR)/calynda_jsx_tokenizer.c $(TOKENIZER_DIR)/calynda_jsx_tokens.h $(TOKENIZER_DIR)/tokenizer.h | $(BUILD_DIR)
+	$(CC) $(CFLAGS) -c $< -o $@
+
+$(BUILD_DIR)/calynda_jsx_ast.o: $(AST_DIR)/calynda_jsx_ast.c $(AST_DIR)/calynda_jsx_ast.h | $(BUILD_DIR)
+	$(CC) $(CFLAGS) -c $< -o $@
+
+$(BUILD_DIR)/calynda_jsx_parser.o: $(PARSER_DIR)/calynda_jsx_parser.c $(PARSER_DIR)/calynda_jsx_parser.h $(AST_DIR)/calynda_jsx_ast.h $(TOKENIZER_DIR)/calynda_jsx_tokens.h | $(BUILD_DIR)
+	$(CC) $(CFLAGS) -c $< -o $@
+
 $(BUILD_DIR)/calynda_gc_refcount.o: $(C_RUNTIME_DIR)/calynda_gc_refcount.c $(C_RUNTIME_DIR)/calynda_gc.h | $(BUILD_DIR)
 	$(CC) $(CFLAGS) -c $< -o $@
 
@@ -434,13 +450,13 @@ $(TEST_RUNTIME_BIN): $(RUNTIME_OBJS) $(TEST_RUNTIME_OBJS)
 $(TEST_CALYNDA_CLI_BIN): $(TEST_CALYNDA_CLI_OBJS) $(CALYNDA_BIN)
 	$(CC) $(CFLAGS) $(TEST_CALYNDA_CLI_OBJS) -o $@
 
-$(TEST_C_EMIT_BIN): $(TOKENIZER_OBJS) $(AST_OBJS) $(PARSER_OBJS) $(SYMBOL_TABLE_OBJS) $(TYPE_RESOLUTION_OBJS) $(TYPE_CHECKER_OBJS) $(HIR_OBJS) $(C_EMIT_OBJS) $(C_RUNTIME_OBJS) $(TEST_C_EMIT_OBJS)
+$(TEST_C_EMIT_BIN): $(TOKENIZER_OBJS) $(AST_OBJS) $(PARSER_OBJS) $(SYMBOL_TABLE_OBJS) $(TYPE_RESOLUTION_OBJS) $(TYPE_CHECKER_OBJS) $(HIR_OBJS) $(C_EMIT_OBJS) $(JSX_OBJS) $(C_RUNTIME_OBJS) $(TEST_C_EMIT_OBJS)
 	$(CC) $(CFLAGS) $^ -o $@
 
 $(BUILD_DIR)/test_c_compile.o: $(TEST_DIR)/test_c_compile.c $(C_EMIT_DIR)/c_emit.h $(HIR_DIR)/hir.h $(SEMA_DIR)/type_checker.h $(SEMA_DIR)/symbol_table.h $(PARSER_DIR)/parser.h | $(BUILD_DIR)
 	$(CC) $(CFLAGS) -c $< -o $@
 
-$(TEST_C_COMPILE_BIN): $(TOKENIZER_OBJS) $(AST_OBJS) $(PARSER_OBJS) $(SYMBOL_TABLE_OBJS) $(TYPE_RESOLUTION_OBJS) $(TYPE_CHECKER_OBJS) $(HIR_OBJS) $(C_EMIT_OBJS) $(C_RUNTIME_OBJS) $(TEST_C_COMPILE_OBJS)
+$(TEST_C_COMPILE_BIN): $(TOKENIZER_OBJS) $(AST_OBJS) $(PARSER_OBJS) $(SYMBOL_TABLE_OBJS) $(TYPE_RESOLUTION_OBJS) $(TYPE_CHECKER_OBJS) $(HIR_OBJS) $(C_EMIT_OBJS) $(JSX_OBJS) $(C_RUNTIME_OBJS) $(TEST_C_COMPILE_OBJS)
 	$(CC) $(CFLAGS) $^ -o $@
 
 $(DUMP_AST_BIN): $(TOKENIZER_OBJS) $(AST_OBJS) $(PARSER_OBJS) $(AST_DUMP_OBJS) $(DUMP_AST_OBJS)
@@ -452,7 +468,7 @@ $(DUMP_SEMANTICS_BIN): $(TOKENIZER_OBJS) $(AST_OBJS) $(PARSER_OBJS) $(SYMBOL_TAB
 $(BUILD_DIR)/calynda_runtime.a: $(RUNTIME_OBJS)
 	ar rcs $@ $^
 
-$(CALYNDA_BIN): $(TOKENIZER_OBJS) $(AST_OBJS) $(PARSER_OBJS) $(SYMBOL_TABLE_OBJS) $(TYPE_RESOLUTION_OBJS) $(TYPE_CHECKER_OBJS) $(HIR_OBJS) $(HIR_DUMP_OBJS) $(C_RUNTIME_OBJS) $(C_EMIT_OBJS) $(CALYNDA_CLI_OBJS)
+$(CALYNDA_BIN): $(TOKENIZER_OBJS) $(AST_OBJS) $(PARSER_OBJS) $(SYMBOL_TABLE_OBJS) $(TYPE_RESOLUTION_OBJS) $(TYPE_CHECKER_OBJS) $(HIR_OBJS) $(HIR_DUMP_OBJS) $(C_RUNTIME_OBJS) $(C_EMIT_OBJS) $(JSX_OBJS) $(CALYNDA_CLI_OBJS)
 	$(CC) $(CFLAGS) $^ -o $@
 
 test: $(TEST_BINS)
@@ -504,12 +520,22 @@ $(HOST_RT_DIR)/mii.o: $(C_RUNTIME_DIR)/mii.c $(C_RUNTIME_DIR)/mii.h | $(HOST_RT_
 $(HOST_RT_DIR)/libcalynda_runtime.a: $(HOST_RT_OBJS)
 	ar rcs $@ $^
 
+SOLID_RT_INC = ../solid_runtime/include
+SOLID_RT_LIB = ../solid_runtime/build
+
 host-runtime: $(HOST_RT_DIR)/libcalynda_runtime.a
 	cp $(C_RUNTIME_DIR)/calynda_runtime.h $(HOST_RT_DIR)/
 	cp $(C_RUNTIME_DIR)/calynda_gc.h $(HOST_RT_DIR)/
 	cp $(C_RUNTIME_DIR)/calynda_wpad.h $(HOST_RT_DIR)/
 	cp $(C_RUNTIME_DIR)/calynda_mii.h $(HOST_RT_DIR)/
 	cp $(C_RUNTIME_DIR)/mii.h $(HOST_RT_DIR)/
+	cp $(SOLID_RT_INC)/solid_runtime.h $(HOST_RT_DIR)/
+	cp $(SOLID_RT_INC)/solid_signal.h $(HOST_RT_DIR)/
+	cp $(SOLID_RT_INC)/solid_effect.h $(HOST_RT_DIR)/
+	cp $(SOLID_RT_INC)/solid_control_flow.h $(HOST_RT_DIR)/
+	cp $(SOLID_RT_INC)/solid_style.h $(HOST_RT_DIR)/
+	cp $(SOLID_RT_INC)/solid_gui_bridge.h $(HOST_RT_DIR)/
+	if [ -f $(SOLID_RT_LIB)/libsolid_wii_host.a ]; then cp $(SOLID_RT_LIB)/libsolid_wii_host.a $(HOST_RT_DIR)/; fi
 
 # ---------------------------------------------------------------
 # Wii runtime (cross-compiled with devkitPPC)
@@ -549,13 +575,74 @@ $(WII_RT_DIR)/libwiiuse.a: | $(WII_RT_DIR)
 	$(DEVKITPPC)/bin/powerpc-eabi-ar r $@ $(WII_RT_DIR)/wpad.o
 	rm -f $(WII_RT_DIR)/wpad.o
 
-wii-runtime: $(WII_RT_DIR)/libcalynda_runtime.a $(WII_RT_DIR)/libwiiuse.a
+SOLID_RT_SRC = ../solid_runtime/src
+SOLID_RT_BRIDGE = ../solid_runtime/bridge
+LIBWIIGUI_DIR = ../libs/libwiigui
+LIBWIIGUI_SRC = $(LIBWIIGUI_DIR)/source
+LIBWIIGUI_BUILD = $(LIBWIIGUI_DIR)/build
+
+# Solid runtime Wii objects (cross-compiled)
+SOLID_WII_C_SRCS = solid_signal.c solid_effect.c solid_runtime.c solid_control_flow.c solid_style.c
+SOLID_WII_OBJS = $(patsubst %.c,$(WII_RT_DIR)/solid_%.o,$(subst solid_,,$(SOLID_WII_C_SRCS)))
+
+SOLID_WII_CFLAGS = -DCALYNDA_WII_BUILD -Wall -Wextra -std=c11 -O2 \
+	-I$(SOLID_RT_INC) -I$(C_RUNTIME_DIR) $(WII_OGCINC)
+
+SOLID_WII_CXXFLAGS = -DCALYNDA_WII_BUILD -DSOLID_HAS_LIBWIIGUI -DGEKKO \
+	-mrvl -mcpu=750 -meabi -mhard-float \
+	-Wall -Wextra -std=c++11 -O2 \
+	-I$(SOLID_RT_INC) -I$(C_RUNTIME_DIR) \
+	-I$(LIBWIIGUI_SRC) -I$(LIBWIIGUI_SRC)/libwiigui -I$(LIBWIIGUI_BUILD) \
+	$(WII_OGCINC) \
+	-I$(DEVKITPRO)/portlibs/ppc/include \
+	-I$(DEVKITPRO)/portlibs/ppc/include/freetype2
+
+$(WII_RT_DIR)/solid_signal.o: $(SOLID_RT_SRC)/solid_signal.c | $(WII_RT_DIR)
+	$(WII_CC) $(SOLID_WII_CFLAGS) -c $< -o $@
+
+$(WII_RT_DIR)/solid_effect.o: $(SOLID_RT_SRC)/solid_effect.c | $(WII_RT_DIR)
+	$(WII_CC) $(SOLID_WII_CFLAGS) -c $< -o $@
+
+$(WII_RT_DIR)/solid_runtime.o: $(SOLID_RT_SRC)/solid_runtime.c | $(WII_RT_DIR)
+	$(WII_CC) $(SOLID_WII_CFLAGS) -c $< -o $@
+
+$(WII_RT_DIR)/solid_control_flow.o: $(SOLID_RT_SRC)/solid_control_flow.c | $(WII_RT_DIR)
+	$(WII_CC) $(SOLID_WII_CFLAGS) -c $< -o $@
+
+$(WII_RT_DIR)/solid_style.o: $(SOLID_RT_SRC)/solid_style.c | $(WII_RT_DIR)
+	$(WII_CC) $(SOLID_WII_CFLAGS) -c $< -o $@
+
+$(WII_RT_DIR)/solid_gui_bridge.o: $(SOLID_RT_BRIDGE)/solid_gui_bridge.cpp | $(WII_RT_DIR) $(LIBWIIGUI_BUILD)/libwiigui.a
+	powerpc-eabi-g++ $(SOLID_WII_CXXFLAGS) -c $< -o $@
+
+$(WII_RT_DIR)/libsolid_wii.a: $(WII_RT_DIR)/solid_signal.o $(WII_RT_DIR)/solid_effect.o \
+	$(WII_RT_DIR)/solid_runtime.o $(WII_RT_DIR)/solid_control_flow.o \
+	$(WII_RT_DIR)/solid_style.o $(WII_RT_DIR)/solid_gui_bridge.o
+	$(DEVKITPPC)/bin/powerpc-eabi-ar rcs $@ $^
+
+# Build libwiigui from source (uses its own Makefile, then extract the library)
+$(LIBWIIGUI_BUILD)/libwiigui.a:
+	DEVKITPPC=$(DEVKITPPC) DEVKITPRO=$(DEVKITPRO) $(MAKE) -C $(LIBWIIGUI_DIR) 2>&1 || true
+	cd $(LIBWIIGUI_BUILD) && powerpc-eabi-ar rcs libwiigui.a \
+		gui_element.o gui_text.o gui_image.o gui_imagedata.o \
+		gui_button.o gui_window.o gui_trigger.o gui_sound.o \
+		FreeTypeGX.o pngu.o oggplayer.o video.o input.o \
+		audio.o gettext.o wiidrc.o font.ttf.o
+
+wii-runtime: $(WII_RT_DIR)/libcalynda_runtime.a $(WII_RT_DIR)/libwiiuse.a $(WII_RT_DIR)/libsolid_wii.a $(LIBWIIGUI_BUILD)/libwiigui.a
 	cp $(C_RUNTIME_DIR)/calynda_runtime.h $(WII_RT_DIR)/
 	cp $(C_RUNTIME_DIR)/calynda_gc.h $(WII_RT_DIR)/
 	cp $(C_RUNTIME_DIR)/calynda_wii_io.h $(WII_RT_DIR)/
 	cp $(C_RUNTIME_DIR)/calynda_wpad.h $(WII_RT_DIR)/
 	cp $(C_RUNTIME_DIR)/calynda_mii.h $(WII_RT_DIR)/
 	cp $(C_RUNTIME_DIR)/mii.h $(WII_RT_DIR)/
+	cp $(SOLID_RT_INC)/solid_runtime.h $(WII_RT_DIR)/
+	cp $(SOLID_RT_INC)/solid_signal.h $(WII_RT_DIR)/
+	cp $(SOLID_RT_INC)/solid_effect.h $(WII_RT_DIR)/
+	cp $(SOLID_RT_INC)/solid_control_flow.h $(WII_RT_DIR)/
+	cp $(SOLID_RT_INC)/solid_style.h $(WII_RT_DIR)/
+	cp $(SOLID_RT_INC)/solid_gui_bridge.h $(WII_RT_DIR)/
+	cp $(LIBWIIGUI_BUILD)/libwiigui.a $(WII_RT_DIR)/
 
 clean:
 	rm -rf $(BUILD_DIR)

@@ -13,6 +13,7 @@
  */
 
 #include "tokenizer.h"
+#include <stdbool.h>
 
 /* JSX token types, starting after TOK_COUNT */
 typedef enum {

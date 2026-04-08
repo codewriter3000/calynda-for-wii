@@ -210,6 +210,8 @@ const char *token_type_name(TokenType type) {
     case TOK_SLASH:          return "SLASH";
     case TOK_PERCENT:        return "PERCENT";
     case TOK_BANG:           return "BANG";
+    case TOK_COMPONENT:      return "COMPONENT";
+    case TOK_SIGNAL:         return "SIGNAL";
     case TOK_COUNT:          return "COUNT";
     }
     return "UNKNOWN";

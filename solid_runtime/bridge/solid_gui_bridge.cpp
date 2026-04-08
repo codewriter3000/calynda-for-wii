@@ -9,6 +9,7 @@
 #ifdef SOLID_HAS_LIBWIIGUI
 /* Real libwiigui build (Wii target) */
 #include "gui.h"
+#include "input.h"
 #else
 /* Host/stub build — provide minimal stubs so the C runtime compiles */
 #endif
@@ -38,10 +39,14 @@ extern "C" {
 #define TO_HANDLE(cls, p) reinterpret_cast<cls *>(p)
 
 /* Per-button click handler storage */
-struct ButtonClickData {
+#define MAX_REGISTERED_BUTTONS 32
+struct ButtonClickEntry {
+    SolidGuiButton   *btn;
     SolidClickHandler handler;
-    void *context;
+    void             *context;
 };
+static ButtonClickEntry registered_buttons[MAX_REGISTERED_BUTTONS];
+static int              registered_button_count = 0;
 
 static GuiTrigger trigger_a;
 static bool trigger_initialized = false;
@@ -51,6 +56,7 @@ static bool trigger_initialized = false;
 extern "C" void solid_bridge_video_init(void) {
     InitVideo();
     SetupPads();
+    InitFreeType((uint8_t *)font_ttf, font_ttf_size);
     if (!trigger_initialized) {
         trigger_a.SetSimpleTrigger(-1, WPAD_BUTTON_A | WPAD_CLASSIC_BUTTON_A, PAD_BUTTON_A);
         trigger_initialized = true;
@@ -58,7 +64,7 @@ extern "C" void solid_bridge_video_init(void) {
 }
 
 extern "C" void solid_bridge_draw_start(void) {
-    Menu_DrawStandard();
+    ResetVideo_Menu();
 }
 
 extern "C" void solid_bridge_draw_end(void) {
@@ -68,26 +74,12 @@ extern "C" void solid_bridge_draw_end(void) {
 /* ---- Input ---- */
 
 extern "C" void solid_bridge_input_init(void) {
-    WPAD_Init();
-    PAD_Init();
+    /* SetupPads() in video_init already calls WPAD_Init/PAD_Init
+       and sets userInput[i].wpad = WPAD_Data(i). Nothing more needed. */
 }
 
 extern "C" void solid_bridge_input_scan(void) {
-    for (int i = 0; i < 4; i++)
-        userInput[i].wpad->btns_d = 0;
-    WPAD_ScanPads();
-    PAD_ScanPads();
-    for (int i = 0; i < 4; i++) {
-        userInput[i].chan = i;
-        WPAD_IR(i, &userInput[i].wpad->ir);
-        userInput[i].pad.btns_d = PAD_ButtonsDown(i);
-        userInput[i].pad.btns_u = PAD_ButtonsUp(i);
-        userInput[i].pad.btns_h = PAD_ButtonsHeld(i);
-        userInput[i].pad.stickX = PAD_StickX(i);
-        userInput[i].pad.stickY = PAD_StickY(i);
-        userInput[i].pad.substickX = PAD_SubStickX(i);
-        userInput[i].pad.substickY = PAD_SubStickY(i);
-    }
+    UpdatePads();
 }
 
 /* ---- Window ---- */
@@ -174,11 +166,12 @@ extern "C" void solid_bridge_button_set_trigger(SolidGuiButton *btn) {
 
 extern "C" void solid_bridge_button_set_click_handler(SolidGuiButton *btn,
                                                        SolidClickHandler handler, void *ctx) {
-    /* Store handler in the update callback mechanism.
-       The actual click checking happens in the frame loop via
-       solid_bridge_button_was_clicked(). */
-    (void)btn; (void)handler; (void)ctx;
-    /* For now, click detection is poll-based via was_clicked() */
+    if (!btn || !handler) return;
+    if (registered_button_count >= MAX_REGISTERED_BUTTONS) return;
+    ButtonClickEntry *e = &registered_buttons[registered_button_count++];
+    e->btn     = btn;
+    e->handler = handler;
+    e->context = ctx;
 }
 
 extern "C" bool solid_bridge_button_was_clicked(SolidGuiButton *btn) {
@@ -191,10 +184,69 @@ extern "C" bool solid_bridge_button_was_clicked(SolidGuiButton *btn) {
     return false;
 }
 
+/* ---- Button names from WPAD/PAD bitmask ---- */
+
+static const char *wpad_button_names[] = {
+    "2", "1", "B", "A", "Minus", NULL, NULL, "Home",
+    "Left", "Right", "Down", "Up", "Plus"
+};
+#define WPAD_BUTTON_BITS 13
+
+extern "C" const char **solid_bridge_get_pressed_buttons(int channel, int *out_count) {
+    static const char *result[16];
+    int count = 0;
+    if (channel < 0 || channel > 3) {
+        if (out_count) *out_count = 0;
+        return result;
+    }
+    uint32_t btns = WPAD_ButtonsDown(channel);
+    for (int i = 0; i < WPAD_BUTTON_BITS && count < 15; i++) {
+        if ((btns & (1u << i)) && wpad_button_names[i]) {
+            result[count++] = wpad_button_names[i];
+        }
+    }
+    /* Also check GameCube pad */
+    uint16_t pad = PAD_ButtonsDown(channel);
+    if ((pad & PAD_BUTTON_A)     && count < 15) result[count++] = "A";
+    if ((pad & PAD_BUTTON_B)     && count < 15) result[count++] = "B";
+    if ((pad & PAD_BUTTON_X)     && count < 15) result[count++] = "X";
+    if ((pad & PAD_BUTTON_Y)     && count < 15) result[count++] = "Y";
+    if ((pad & PAD_BUTTON_START) && count < 15) result[count++] = "Start";
+    result[count] = NULL;
+    if (out_count) *out_count = count;
+    return result;
+}
+
+extern "C" void solid_bridge_poll_button_clicks(void) {
+    for (int i = 0; i < registered_button_count; i++) {
+        ButtonClickEntry *e = &registered_buttons[i];
+        GuiButton *b = AS_BUTTON(e->btn);
+        if (b->GetState() == STATE::CLICKED) {
+            b->ResetState();
+            /* Determine which channel triggered the click.
+               Check all 4 channels for any buttons down. */
+            const char **btns = NULL;
+            int btn_count = 0;
+            for (int ch = 0; ch < 4; ch++) {
+                btns = solid_bridge_get_pressed_buttons(ch, &btn_count);
+                if (btn_count > 0) break;
+            }
+            /* If no specific button detected, report "A" as default
+               since the trigger was set to A */
+            static const char *default_btn[] = {"A", NULL};
+            if (btn_count == 0) {
+                btns = default_btn;
+                btn_count = 1;
+            }
+            e->handler(btns, btn_count, e->context);
+        }
+    }
+}
+
 /* ---- Sound ---- */
 
 extern "C" SolidGuiSound *solid_bridge_sound_new(const uint8_t *data, size_t size) {
-    return TO_HANDLE(SolidGuiSound, new GuiSound(data, size, SOUND_OGG));
+    return TO_HANDLE(SolidGuiSound, new GuiSound(data, size, SOUND::OGG));
 }
 
 extern "C" void solid_bridge_sound_play(SolidGuiSound *snd) {
@@ -209,6 +261,10 @@ extern "C" void solid_bridge_sound_stop(SolidGuiSound *snd) {
 
 extern "C" void solid_bridge_element_set_position(SolidGuiElement *el, int x, int y) {
     if (el) AS_ELEMENT(el)->SetPosition(x, y);
+}
+
+extern "C" void solid_bridge_element_set_alignment_top_left(SolidGuiElement *el) {
+    if (el) AS_ELEMENT(el)->SetAlignment(ALIGN_H::LEFT, ALIGN_V::TOP);
 }
 
 extern "C" void solid_bridge_element_set_alpha(SolidGuiElement *el, int alpha) {
@@ -253,6 +309,31 @@ extern "C" void solid_bridge_element_set_background_color(SolidGuiElement *el,
        For now, this is a no-op placeholder — the emitter should create
        a GuiImage background separately and Append it before the element. */
     (void)el; (void)r; (void)g; (void)b; (void)a;
+}
+
+/* ---- Element angle/rotation ---- */
+
+extern "C" void solid_bridge_element_set_angle(SolidGuiElement *el, float angle_deg) {
+    /* GuiElement does not support SetAngle — no-op */
+    (void)el; (void)angle_deg;
+}
+
+/* ---- Pointer / cursor ---- */
+
+extern "C" void solid_bridge_pointer_get_position(int channel,
+                                                   int *out_x, int *out_y,
+                                                   float *out_angle,
+                                                   bool *out_valid) {
+    if (channel < 0 || channel > 3) {
+        if (out_valid) *out_valid = false;
+        return;
+    }
+    ir_t ir;
+    WPAD_IR(channel, &ir);
+    if (out_x) *out_x = (int)ir.x;
+    if (out_y) *out_y = (int)ir.y;
+    if (out_angle) *out_angle = ir.angle;
+    if (out_valid) *out_valid = (ir.valid != 0);
 }
 
 /* ---- Casting helpers ---- */
@@ -325,6 +406,13 @@ extern "C" void solid_bridge_button_set_trigger(SolidGuiButton *b) { (void)b; }
 extern "C" void solid_bridge_button_set_click_handler(SolidGuiButton *b,
     SolidClickHandler h, void *c) { (void)b; (void)h; (void)c; }
 extern "C" bool solid_bridge_button_was_clicked(SolidGuiButton *b) { (void)b; return false; }
+extern "C" const char **solid_bridge_get_pressed_buttons(int ch, int *out_count) {
+    (void)ch;
+    static const char *empty[] = {NULL};
+    if (out_count) *out_count = 0;
+    return empty;
+}
+extern "C" void solid_bridge_poll_button_clicks(void) { }
 
 extern "C" SolidGuiSound *solid_bridge_sound_new(const uint8_t *d, size_t s) {
     (void)d; (void)s;
@@ -334,6 +422,7 @@ extern "C" void solid_bridge_sound_play(SolidGuiSound *s) { (void)s; }
 extern "C" void solid_bridge_sound_stop(SolidGuiSound *s) { (void)s; }
 
 extern "C" void solid_bridge_element_set_position(SolidGuiElement *e, int x, int y) { (void)e; (void)x; (void)y; }
+extern "C" void solid_bridge_element_set_alignment_top_left(SolidGuiElement *e) { (void)e; }
 extern "C" void solid_bridge_element_set_alpha(SolidGuiElement *e, int a) { (void)e; (void)a; }
 extern "C" void solid_bridge_element_set_visible(SolidGuiElement *e, bool v) { (void)e; (void)v; }
 extern "C" void solid_bridge_element_set_scale(SolidGuiElement *e, float s) { (void)e; (void)s; }
@@ -348,5 +437,16 @@ extern "C" SolidGuiElement *solid_bridge_text_as_element(SolidGuiText *t) { retu
 extern "C" SolidGuiElement *solid_bridge_image_as_element(SolidGuiImage *i) { return (SolidGuiElement *)i; }
 extern "C" SolidGuiElement *solid_bridge_button_as_element(SolidGuiButton *b) { return (SolidGuiElement *)b; }
 extern "C" SolidGuiElement *solid_bridge_window_as_element(SolidGuiWindow *w) { return (SolidGuiElement *)w; }
+
+extern "C" void solid_bridge_element_set_angle(SolidGuiElement *e, float a) { (void)e; (void)a; }
+extern "C" void solid_bridge_pointer_get_position(int ch,
+    int *ox, int *oy, float *oa, bool *ov) {
+    /* Host stub: pointer at center, always valid */
+    (void)ch;
+    if (ox) *ox = 320;
+    if (oy) *oy = 240;
+    if (oa) *oa = 0.0f;
+    if (ov) *ov = true;
+}
 
 #endif /* SOLID_HAS_LIBWIIGUI */

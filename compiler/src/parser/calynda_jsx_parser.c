@@ -39,25 +39,23 @@ static char *dup_str(const char *s, size_t len)
  * We re-use the base tokenizer to get standard Calynda tokens
  * until we hit the closing '}' at depth 0.
  *
- * For now, this creates a simple literal or identifier expression
- * from the token stream. A full implementation would invoke the
- * Calynda parser's parse_expression_node().
+ * Also captures the raw source text between { and } into raw_text_out
+ * (if non-NULL) for use at emit time.
  */
-static AstExpression *jsx_parse_inline_expression(JsxTokenizer *jt)
+static AstExpression *jsx_parse_inline_expression(JsxTokenizer *jt,
+                                                  char **raw_text_out)
 {
-    /* Collect tokens until JSX_EXPR_END or matching '}' */
-    /* For the initial implementation, handle simple cases:
-       - integer literal
-       - string literal
-       - identifier (variable reference)
-       - template literal
-       - lambda expression: () -> expr
-    */
+    /* Record start position (right after the opening {) */
+    const char *raw_start = jt->base.current;
 
     AstExpression *expr = (AstExpression *)calloc(1, sizeof(AstExpression));
-    if (!expr) return NULL;
+    if (!expr) {
+        if (raw_text_out) *raw_text_out = NULL;
+        return NULL;
+    }
 
     JsxToken tok = jsx_tokenizer_next(jt);
+    const char *last_end = tok.start + tok.length;
 
     if (tok.jsx_type == TOK_INT_LIT) {
         expr->kind = AST_EXPR_LITERAL;
@@ -78,7 +76,6 @@ static AstExpression *jsx_parse_inline_expression(JsxTokenizer *jt)
     } else if (tok.jsx_type == TOK_TEMPLATE_START || tok.jsx_type == TOK_TEMPLATE_FULL) {
         expr->kind = AST_EXPR_LITERAL;
         expr->as.literal.kind = AST_LITERAL_TEMPLATE;
-        /* Template handling is complex — for now store as string */
         expr->as.literal.as.text = dup_str(tok.start, tok.length);
     } else if (tok.jsx_type == TOK_TRUE) {
         expr->kind = AST_EXPR_LITERAL;
@@ -95,12 +92,22 @@ static AstExpression *jsx_parse_inline_expression(JsxTokenizer *jt)
     }
 
     /* Consume remaining tokens until we hit EXPR_END */
-    /* A proper implementation chains binary/call/member exprs here */
     JsxToken next = jsx_tokenizer_next(jt);
     while (next.jsx_type != TOK_JSX_EXPR_END &&
            next.jsx_type != TOK_EOF) {
-        /* Skip tokens in complex expressions for now */
+        last_end = next.start + next.length;
         next = jsx_tokenizer_next(jt);
+    }
+
+    /* Capture raw text from start to just before the closing } */
+    if (raw_text_out) {
+        const char *raw_end = next.start; /* points at } */
+        /* Trim whitespace */
+        while (raw_end > raw_start && (raw_end[-1] == ' ' || raw_end[-1] == '\n' ||
+               raw_end[-1] == '\r' || raw_end[-1] == '\t')) raw_end--;
+        while (raw_start < raw_end && (*raw_start == ' ' || *raw_start == '\n' ||
+               *raw_start == '\r' || *raw_start == '\t')) raw_start++;
+        *raw_text_out = dup_str(raw_start, (size_t)(raw_end - raw_start));
     }
 
     return expr;
@@ -214,6 +221,86 @@ bool jsx_parse_style_object(JsxTokenizer *jt, JsxAttribute *attr)
     return true;
 }
 
+/* ---- CSS string parsing (Solid.js-style) ---- */
+
+/*
+ * Parse a CSS string like "color: #FFFFFF; background-color: #2D2D2D;"
+ * into JsxStyleProp entries on the attribute.
+ */
+static void jsx_parse_css_string(const char *css, JsxAttribute *attr)
+{
+    const char *p = css;
+
+    while (*p) {
+        /* Skip whitespace */
+        while (*p == ' ' || *p == '\t' || *p == '\n' || *p == '\r') p++;
+        if (*p == '\0') break;
+
+        /* Property name (up to ':') */
+        const char *name_start = p;
+        while (*p && *p != ':' && *p != ';') p++;
+        if (*p != ':') break;
+        const char *name_end = p;
+        /* Trim trailing whitespace from name */
+        while (name_end > name_start &&
+               (name_end[-1] == ' ' || name_end[-1] == '\t')) name_end--;
+        p++; /* skip ':' */
+
+        /* Skip whitespace */
+        while (*p == ' ' || *p == '\t') p++;
+
+        /* Property value (up to ';' or end) */
+        const char *val_start = p;
+        while (*p && *p != ';') p++;
+        const char *val_end = p;
+        /* Trim trailing whitespace from value */
+        while (val_end > val_start &&
+               (val_end[-1] == ' ' || val_end[-1] == '\t')) val_end--;
+        if (*p == ';') p++;
+
+        if (name_end <= name_start || val_end <= val_start) continue;
+
+        /* Build the style prop */
+        AstExpression *val_expr = (AstExpression *)calloc(1, sizeof(AstExpression));
+        if (!val_expr) continue;
+
+        /* Check if it looks like a number */
+        bool is_number = true;
+        for (const char *q = val_start; q < val_end; q++) {
+            if (!isdigit((unsigned char)*q) && *q != '.' && *q != '-') {
+                is_number = false;
+                break;
+            }
+        }
+
+        if (is_number && val_end > val_start) {
+            val_expr->kind = AST_EXPR_LITERAL;
+            val_expr->as.literal.kind = AST_LITERAL_INTEGER;
+            val_expr->as.literal.as.text = dup_str(val_start,
+                                                    (size_t)(val_end - val_start));
+        } else {
+            val_expr->kind = AST_EXPR_LITERAL;
+            val_expr->as.literal.kind = AST_LITERAL_STRING;
+            val_expr->as.literal.as.text = dup_str(val_start,
+                                                    (size_t)(val_end - val_start));
+        }
+
+        /* Grow array if needed */
+        if (attr->as.style.count >= attr->as.style.capacity) {
+            size_t new_cap = attr->as.style.capacity * 2;
+            JsxStyleProp *new_props = (JsxStyleProp *)realloc(
+                attr->as.style.props, sizeof(JsxStyleProp) * new_cap);
+            if (!new_props) { free(val_expr); continue; }
+            attr->as.style.props = new_props;
+            attr->as.style.capacity = new_cap;
+        }
+
+        JsxStyleProp *prop = &attr->as.style.props[attr->as.style.count++];
+        prop->name = dup_str(name_start, (size_t)(name_end - name_start));
+        prop->value = val_expr;
+    }
+}
+
 /* ---- Attribute parsing ---- */
 
 bool jsx_parse_attributes(JsxTokenizer *jt, JsxElement *element)
@@ -261,14 +348,32 @@ bool jsx_parse_attributes(JsxTokenizer *jt, JsxElement *element)
         JsxToken val = jsx_tokenizer_next(jt);
 
         if (val.jsx_type == TOK_STRING_LIT) {
-            /* String attribute: name="value" */
-            JsxAttribute attr = jsx_attr_string(
-                attr_name,
-                val.length >= 2 ? dup_str(val.start + 1, val.length - 2) : "");
-            free(attr_name);
-            jsx_element_add_attr(element, attr);
+            if (strcmp(attr_name, "style") == 0) {
+                /* Solid.js-style string notation: style="color: #FFF; width: 100px;" */
+                char *css_str = (val.length >= 2)
+                    ? dup_str(val.start + 1, val.length - 2) : dup_str("", 0);
+                JsxAttribute attr;
+                memset(&attr, 0, sizeof(attr));
+                attr.name = attr_name;
+                attr.kind = JSX_ATTR_STYLE;
+                attr.as.style.count = 0;
+                attr.as.style.capacity = 4;
+                attr.as.style.props = (JsxStyleProp *)calloc(4, sizeof(JsxStyleProp));
+                if (attr.as.style.props && css_str) {
+                    jsx_parse_css_string(css_str, &attr);
+                }
+                free(css_str);
+                jsx_element_add_attr(element, attr);
+            } else {
+                /* String attribute: name="value" */
+                JsxAttribute attr = jsx_attr_string(
+                    attr_name,
+                    val.length >= 2 ? dup_str(val.start + 1, val.length - 2) : "");
+                free(attr_name);
+                jsx_element_add_attr(element, attr);
+            }
         } else if (val.jsx_type == TOK_JSX_EXPR_START) {
-            /* Check for style={{ }} */
+            /* Check for style={{ }} — keep for backwards compat */
             if (strcmp(attr_name, "style") == 0) {
                 JsxAttribute attr;
                 memset(&attr, 0, sizeof(attr));
@@ -283,14 +388,18 @@ bool jsx_parse_attributes(JsxTokenizer *jt, JsxElement *element)
                 jsx_element_add_attr(element, attr);
             } else if (strncmp(attr_name, "on", 2) == 0) {
                 /* Event handler: onClick={() -> expr} */
-                AstExpression *handler = jsx_parse_inline_expression(jt);
+                char *raw = NULL;
+                AstExpression *handler = jsx_parse_inline_expression(jt, &raw);
                 JsxAttribute attr = jsx_attr_handler(attr_name, handler);
+                attr.raw_text = raw;
                 free(attr_name);
                 jsx_element_add_attr(element, attr);
             } else {
                 /* Expression attribute: name={expr} */
-                AstExpression *expr = jsx_parse_inline_expression(jt);
+                char *raw = NULL;
+                AstExpression *expr = jsx_parse_inline_expression(jt, &raw);
                 JsxAttribute attr = jsx_attr_expr(attr_name, expr);
+                attr.raw_text = raw;
                 free(attr_name);
                 jsx_element_add_attr(element, attr);
             }
@@ -363,9 +472,14 @@ bool jsx_parse_children(JsxTokenizer *jt, JsxElement *element)
 
         /* Expression child {expr} */
         else if (tok.jsx_type == TOK_JSX_EXPR_START) {
-            AstExpression *expr = jsx_parse_inline_expression(jt);
+            char *raw = NULL;
+            AstExpression *expr = jsx_parse_inline_expression(jt, &raw);
             if (expr) {
-                jsx_element_add_child(element, jsx_child_expr(expr));
+                JsxChild child = jsx_child_expr(expr);
+                child.raw_text = raw;
+                jsx_element_add_child(element, child);
+            } else {
+                free(raw);
             }
         }
 

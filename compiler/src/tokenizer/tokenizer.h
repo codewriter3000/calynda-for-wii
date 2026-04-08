@@ -147,6 +147,10 @@ typedef enum {
     /* Unary */
     TOK_BANG,             /* !   */
 
+    /* JSX / Solid keywords */
+    TOK_COMPONENT,        /* component */
+    TOK_SIGNAL,           /* signal    */
+
     TOK_COUNT             /* sentinel — number of token types */
 } TokenType;
 

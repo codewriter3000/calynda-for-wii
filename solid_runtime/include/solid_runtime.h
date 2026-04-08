@@ -54,6 +54,15 @@ void solid_runtime_init(void);
  */
 void solid_runtime_shutdown(void);
 
+/*
+ * Register a GUI element as a pointer cursor that tracks Wii remote IR.
+ * channel: Wii remote channel (0–3)
+ * cursor:  opaque pointer to the cursor image element
+ *
+ * The runtime main loop will update the cursor position each frame.
+ */
+void solid_register_pointer(int channel, SolidGuiElement *cursor);
+
 #ifdef __cplusplus
 }
 #endif

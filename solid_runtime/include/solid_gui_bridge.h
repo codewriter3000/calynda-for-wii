@@ -32,7 +32,12 @@ typedef struct SolidGuiSound     SolidGuiSound;
 typedef struct SolidGuiTrigger   SolidGuiTrigger;
 
 /* ---- Callback type for button click handlers ---- */
-typedef void (*SolidClickHandler)(void *context);
+/*
+ * buttons:      array of string names for buttons pressed (e.g. "A", "B")
+ * button_count: number of strings in the array
+ * context:      user data pointer registered with the handler
+ */
+typedef void (*SolidClickHandler)(const char **buttons, int button_count, void *context);
 
 /* ---- Video / draw lifecycle ---- */
 
@@ -78,6 +83,21 @@ void solid_bridge_button_set_click_handler(SolidGuiButton *btn,
                                            SolidClickHandler handler, void *context);
 bool solid_bridge_button_was_clicked(SolidGuiButton *btn);
 
+/*
+ * Poll all registered buttons for clicks.
+ * When a button is in the CLICKED state, builds an array of pressed-button
+ * names from WPAD/PAD state and dispatches the registered handler.
+ * Call once per frame, after window_update().
+ */
+void solid_bridge_poll_button_clicks(void);
+
+/*
+ * Query which buttons are currently held/down on the given channel.
+ * Returns an array of const string pointers (static storage) and sets
+ * *out_count.  The caller must NOT free the strings.
+ */
+const char **solid_bridge_get_pressed_buttons(int channel, int *out_count);
+
 /* ---- Sound ---- */
 
 SolidGuiSound *solid_bridge_sound_new(const uint8_t *ogg_data, size_t ogg_size);
@@ -87,6 +107,7 @@ void solid_bridge_sound_stop(SolidGuiSound *snd);
 /* ---- Element (base) ---- */
 
 void solid_bridge_element_set_position(SolidGuiElement *el, int x, int y);
+void solid_bridge_element_set_alignment_top_left(SolidGuiElement *el);
 void solid_bridge_element_set_alpha(SolidGuiElement *el, int alpha);
 void solid_bridge_element_set_visible(SolidGuiElement *el, bool visible);
 void solid_bridge_element_set_scale(SolidGuiElement *el, float scale);
@@ -101,6 +122,22 @@ void solid_bridge_element_set_color(SolidGuiElement *el,
                                     uint8_t r, uint8_t g, uint8_t b, uint8_t a);
 void solid_bridge_element_set_background_color(SolidGuiElement *el,
                                                uint8_t r, uint8_t g, uint8_t b, uint8_t a);
+
+/* ---- Element angle/rotation ---- */
+
+void solid_bridge_element_set_angle(SolidGuiElement *el, float angle_deg);
+
+/* ---- Pointer / cursor ---- */
+
+/*
+ * Query the Wii remote IR pointer position for the given channel (0–3).
+ * x/y are in screen coordinates (640×480). valid is false when the
+ * pointer is offscreen.
+ */
+void solid_bridge_pointer_get_position(int channel,
+                                       int *out_x, int *out_y,
+                                       float *out_angle,
+                                       bool *out_valid);
 
 /* ---- Casting helpers ---- */
 

@@ -58,10 +58,14 @@ TEST_SIGNAL  = $(BUILD_DIR)/test_solid_signal
 TEST_EFFECT  = $(BUILD_DIR)/test_solid_effect
 TEST_STYLE   = $(BUILD_DIR)/test_solid_style
 
-# ── Default target ──────────────────────────────────────────────────
-.PHONY: all clean test wii
+# Game / example binaries
+GAME_SRC     = ../game/src
+COUNTER_GUI  = $(BUILD_DIR)/counter_gui
 
-all: $(BUILD_DIR) $(LIB_HOST) $(TEST_SIGNAL) $(TEST_EFFECT) $(TEST_STYLE)
+# ── Default target ──────────────────────────────────────────────────
+.PHONY: all clean test wii counter
+
+all: $(BUILD_DIR) $(LIB_HOST) $(TEST_SIGNAL) $(TEST_EFFECT) $(TEST_STYLE) $(COUNTER_GUI)
 
 $(BUILD_DIR):
 	mkdir -p $(BUILD_DIR)
@@ -95,6 +99,14 @@ $(TEST_EFFECT): $(TEST_SRC)/test_solid_effect.c $(LIB_HOST)
 
 $(TEST_STYLE): $(TEST_SRC)/test_solid_style.c $(LIB_HOST)
 	$(CXX) $(CXXFLAGS) $< -L$(BUILD_DIR) -lsolid_wii_host -o $@
+
+# ── Counter GUI app ─────────────────────────────────────────────────
+
+$(COUNTER_GUI): $(GAME_SRC)/counter_gui.c $(LIB_HOST)
+	$(CXX) $(CXXFLAGS) $< -L$(BUILD_DIR) -lsolid_wii_host -o $@
+
+counter: $(BUILD_DIR) $(LIB_HOST) $(COUNTER_GUI)
+	@echo "Built counter_gui → $(COUNTER_GUI)"
 
 # ── Test runner ─────────────────────────────────────────────────────
 

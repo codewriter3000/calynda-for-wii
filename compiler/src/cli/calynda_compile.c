@@ -1,5 +1,6 @@
 #include "calynda_internal.h"
 #include "c_emit.h"
+#include "c_emit_jsx_file.h"
 
 #include <errno.h>
 #include <stdlib.h>
@@ -25,6 +26,14 @@ int calynda_compile_to_c(const char *path, FILE *out) {
     source = calynda_read_entire_file(path);
     if (!source) {
         return 66;
+    }
+
+    /* If the source contains component declarations, use the JSX
+       compilation path which bypasses sema/HIR and emits C directly. */
+    if (jsx_source_has_components(source)) {
+        exit_code = jsx_compile_to_c(source, path, out);
+        free(source);
+        return exit_code;
     }
 
     symbol_table_init(&symbols);
