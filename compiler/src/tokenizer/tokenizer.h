@@ -147,7 +147,7 @@ typedef enum {
     /* Unary */
     TOK_BANG,             /* !   */
 
-    /* JSX / Solid keywords */
+    /* JSX / Solite keywords */
     TOK_COMPONENT,        /* component */
     TOK_SIGNAL,           /* signal    */
 

@@ -4,7 +4,7 @@
  * Point your Wii remote at the screen to see a cursor.
  * Click [+], [-], or [Reset] to change the counter.
  *
- * This Calynda + Solid JSX compiles to C bridge calls
+ * This Calynda + Solite JSX compiles to C bridge calls
  * (see game/src/counter_gui.c for the generated output).
  */
 import io.gui;

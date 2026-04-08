@@ -284,6 +284,155 @@ The `io.wpad` package wraps libogc WPAD API with host stubs for testing:
 ### Console I/O
 `calynda_wii_io.c` initializes libogc VIDEO subsystem and framebuffer console. After init, standard `printf`/`puts` writes to the Wii screen.
 
+## Solite — Reactive UI Runtime for Wii
+
+**Solite** is a lite version of Solid.js for the Wii, providing a reactive UI layer on top of libwiigui. Calynda `.cal` files can use JSX-like component syntax with signals and effects, which the compiler transpiles directly to C code calling the Solite bridge and reactive APIs.
+
+### Architecture
+
+```
+main.cal (JSX/component syntax)
+  → JSX Tokenizer → JSX AST → JSX Parser
+  → c_emit_jsx_file.c (JSX → C transpiler)
+  → Generated C (solite_bridge_* + solite_signal_* + solite_effect_* calls)
+  → Cross-compile with powerpc-eabi-g++ linking libsolite_wii.a + libwiigui.a
+  → DOL executable
+```
+
+When the compiler detects a `component` keyword in a `.cal` file, it bypasses the normal sema/HIR pipeline and routes through `jsx_compile_to_c()` in `c_emit_jsx_file.c`.
+
+### Source Layout
+
+```
+solite_runtime/
+  include/           # Public headers
+    solite_runtime.h     # Umbrella header (includes all below)
+    solite_signal.h      # Reactive signals (SoliteSignal, create/get/set/dispose)
+    solite_effect.h      # Effects & memos (SoliteEffect, SoliteMemo, batching)
+    solite_control_flow.h # SoliteShow (conditional), SoliteFor (list mapping)
+    solite_style.h       # CSS-like style application
+    solite_gui_bridge.h  # C-linkage bridge to libwiigui C++ API
+  src/               # Implementations
+    solite_signal.c
+    solite_effect.c
+    solite_runtime.c     # Main loop: input → pointers → effects → GUI → clicks → draw
+    solite_control_flow.c
+    solite_style.c
+  bridge/
+    solite_gui_bridge.cpp  # Real bridge (#ifdef SOLITE_HAS_LIBWIIGUI) + host stubs
+  tests/
+    test_solite_signal.c
+    test_solite_effect.c
+    test_solite_style.c
+  Makefile
+```
+
+### Reactive Primitives
+
+**Signals** (`solite_signal.h`):
+- `SoliteSignal *solite_create_signal(CalyndaRtWord initial)` — Create a reactive signal
+- `CalyndaRtWord solite_signal_get(SoliteSignal *sig)` — Read value (registers dependency)
+- `void solite_signal_set(SoliteSignal *sig, CalyndaRtWord value)` — Write value (triggers effects)
+- `void solite_signal_dispose(SoliteSignal *sig)` — Clean up
+
+**Effects** (`solite_effect.h`):
+- `SoliteEffect *solite_create_effect(SoliteEffectFn fn, void *context)` — Create reactive effect
+- `void solite_effect_flush_pending(void)` — Run all pending effects
+- `SoliteMemo *solite_create_memo(SoliteMemoFn fn, void *context)` — Derived computation
+- `void solite_batch_start(void)` / `solite_batch_end(void)` — Batch signal updates
+
+**Control Flow** (`solite_control_flow.h`):
+- `SoliteShow` — Conditionally adds/removes a child element based on a signal
+- `SoliteFor` — Maps a signal-backed list to child elements
+
+### GUI Bridge (`solite_gui_bridge.h`)
+
+C-linkage bridge to libwiigui's C++ classes. All types are opaque handles:
+- `SoliteGuiWindow`, `SoliteGuiText`, `SoliteGuiImage`, `SoliteGuiImageData`
+- `SoliteGuiButton`, `SoliteGuiSound`, `SoliteGuiTrigger`, `SoliteGuiElement`
+
+**Key bridge functions**:
+- `solite_bridge_video_init()` — Initialize VIDEO, pads, FreeType
+- `solite_bridge_window_new(w, h)` — Create root window
+- `solite_bridge_text_new(text, size, color)` — Create text element
+- `solite_bridge_button_new(w, h)` — Create button with trigger/click support
+- `solite_bridge_button_set_click_handler(btn, handler, ctx)` — Register click callback
+- `solite_bridge_poll_button_clicks()` — Dispatch pending click events
+- `solite_bridge_get_pressed_buttons(channel, &count)` — Get button name array ["A","B","Home",...]
+- `solite_bridge_element_set_position(el, x, y)` — Position element
+- `solite_bridge_element_set_alignment_top_left(el)` — Override default CENTER/MIDDLE alignment
+- `solite_bridge_input_scan()` — Calls libwiigui's `UpdatePads()`
+
+**Click handler signature**: `void (*SoliteClickHandler)(const char **buttons, int button_count, void *context)`
+
+The bridge has two compile paths:
+- **Real** (`#ifdef SOLITE_HAS_LIBWIIGUI`): Wraps actual libwiigui C++ objects
+- **Stub** (host builds): No-op stubs for compilation/testing without libwiigui
+
+### Main Loop (`solite_runtime.c`)
+
+`solite_mount(root)` runs the frame loop:
+1. `solite_bridge_input_scan()` — Poll Wii remotes (calls `UpdatePads()`)
+2. `solite_update_pointers()` — Track IR cursor positions per frame
+3. `solite_effect_flush_pending()` — Execute reactive effects
+4. `solite_bridge_window_update(root)` — Update GUI tree state
+5. `solite_bridge_poll_button_clicks()` — Dispatch click handlers
+6. `solite_bridge_draw_start()` / `solite_bridge_window_draw()` / `solite_bridge_draw_end()` — Render
+
+Pointer registration: `solite_register_pointer(channel, cursor_element)` tracks up to 4 Wii remotes.
+
+### JSX Compilation (`compiler/src/c_emit/c_emit_jsx_file.c`)
+
+The JSX emitter transpiles Calynda component syntax to C:
+
+**Input** (main.cal):
+```calynda
+component Counter() -> {
+    var count = createSignal(0);
+    return (
+        <Window width={640} height={480}>
+            <Text text={`Count: ${count()}`} size={28} color="#FFFFFF" />
+            <Button x={100} y={200} width={120} height={40}
+                    label="+" onClick={(buttons) -> { setCount(count() + 1); }} />
+            <Pointer channel={0} size={48} />
+        </Window>
+    );
+};
+```
+
+**Emitted C**:
+- Signal globals: `static SoliteSignal *sig_count = NULL;`
+- Handler functions: `void handler_0(const char **buttons, int button_count, void *user_data) { ... }`
+- Effect functions for reactive text updates
+- `component_Counter()` builds the GUI tree with bridge calls
+- `boot()` wrapper calls `solite_bridge_video_init()`, component, `solite_mount()`
+
+**JSX features supported**:
+- `<Window>`, `<Text>`, `<Button>`, `<Image>`, `<Pointer>` elements
+- Reactive text via template literals: `` {`Count: ${count()}`} `` and bare signals: `{count}`
+- Style strings (Solite-style): `style="color: #FFF; width: 100px;"`
+- Click handlers with button array: `onClick={(buttons) -> { ... }}`
+- Signal creation: `createSignal(initial)`, getter: `count()`, setter: `setCount(value)`
+
+### Build Integration
+
+**compiler/Makefile** targets:
+- `wii-runtime` — Cross-compiles Solite sources + bridge with `-DSOLITE_HAS_LIBWIIGUI -DGEKKO`, produces `libsolite_wii.a`
+- Headers copied to `compiler/build/wii/` for the CLI to find at link time
+
+**Link flags** (in `calynda_utils.c`):
+`-lsolite_wii -lcalynda_runtime -lwiigui -lfreetype -lpng -lz -lbz2 -lbrotlidec -lbrotlicommon -lvorbisidec -logg -lasnd -lwiiuse -lbte -logc -lm`
+
+**libwiigui**: Cloned to `libs/libwiigui/`, built as `libwiigui.a` static library by the compiler Makefile.
+
+### Testing
+
+```bash
+cd solite_runtime && make test   # Runs test_solite_signal, test_solite_effect, test_solite_style
+```
+
+Host builds use stub bridge (no `-DSOLITE_HAS_LIBWIIGUI`) so signal/effect/style logic can be tested natively.
+
 ## Key Design Decisions
 
 1. **No loops in the language** — Use recursion. The C emitter detects self-recursive tail calls and optimizes them to `for(;;)` loops to prevent stack overflow on the Wii's limited stack.

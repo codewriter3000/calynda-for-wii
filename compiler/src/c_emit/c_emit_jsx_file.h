@@ -5,7 +5,7 @@
  * c_emit_jsx_file.h — Full-file JSX compiler.
  *
  * Alternative compilation path for Calynda source files that contain
- * JSX/Solid component declarations.  Bypasses the normal sema/HIR
+ * JSX/Solite component declarations.  Bypasses the normal sema/HIR
  * pipeline and emits C code directly from JSX constructs.
  */
 

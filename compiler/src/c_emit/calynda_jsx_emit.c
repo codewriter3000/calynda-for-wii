@@ -2,17 +2,17 @@
  * calynda_jsx_emit.c — C code emitter for JSX elements.
  *
  * Walks the JsxElement AST and emits C code targeting the
- * solid_bridge_* API and solid_* reactive runtime.
+ * solite_bridge_* API and solite_* reactive runtime.
  *
  * Widget mapping:
- *   <Window>  → solid_bridge_window_new()
- *   <Button>  → solid_bridge_button_new()
- *   <Text>    → solid_bridge_text_new()
- *   <Image>   → solid_bridge_image_new_color()
+ *   <Window>  → solite_bridge_window_new()
+ *   <Button>  → solite_bridge_button_new()
+ *   <Text>    → solite_bridge_text_new()
+ *   <Image>   → solite_bridge_image_new_color()
  *
- * Style properties are emitted via the solid_style_* API.
+ * Style properties are emitted via the solite_style_* API.
  * Event handlers become lambda closures with bridge callbacks.
- * Reactive expressions ({expr}) become solid_create_effect() calls.
+ * Reactive expressions ({expr}) become solite_create_effect() calls.
  */
 
 #include "calynda_jsx_emit.h"
@@ -46,11 +46,11 @@ static int next_effect_id(JsxEmitContext *ctx)
  */
 static const char *bridge_type_for_tag(const char *tag)
 {
-    if (strcmp(tag, "Window") == 0) return "SolidGuiWindow";
-    if (strcmp(tag, "Button") == 0) return "SolidGuiButton";
-    if (strcmp(tag, "Text") == 0)   return "SolidGuiText";
-    if (strcmp(tag, "Image") == 0)  return "SolidGuiImage";
-    return "SolidGuiElement";
+    if (strcmp(tag, "Window") == 0) return "SoliteGuiWindow";
+    if (strcmp(tag, "Button") == 0) return "SoliteGuiButton";
+    if (strcmp(tag, "Text") == 0)   return "SoliteGuiText";
+    if (strcmp(tag, "Image") == 0)  return "SoliteGuiImage";
+    return "SoliteGuiElement";
 }
 
 /*
@@ -58,10 +58,10 @@ static const char *bridge_type_for_tag(const char *tag)
  */
 static const char *as_element_fn(const char *tag)
 {
-    if (strcmp(tag, "Window") == 0) return "solid_bridge_window_as_element";
-    if (strcmp(tag, "Button") == 0) return "solid_bridge_button_as_element";
-    if (strcmp(tag, "Text") == 0)   return "solid_bridge_text_as_element";
-    if (strcmp(tag, "Image") == 0)  return "solid_bridge_image_as_element";
+    if (strcmp(tag, "Window") == 0) return "solite_bridge_window_as_element";
+    if (strcmp(tag, "Button") == 0) return "solite_bridge_button_as_element";
+    if (strcmp(tag, "Text") == 0)   return "solite_bridge_text_as_element";
+    if (strcmp(tag, "Image") == 0)  return "solite_bridge_image_as_element";
     return "";
 }
 
@@ -120,7 +120,7 @@ static void emit_window(JsxEmitContext *ctx, const JsxElement *el, int id)
     int w = get_int_attr(el, "width", 640);
     int h = get_int_attr(el, "height", 480);
     emit_indent(ctx);
-    fprintf(ctx->out, "SolidGuiWindow *__jsx_%d = solid_bridge_window_new(%d, %d);\n",
+    fprintf(ctx->out, "SoliteGuiWindow *__jsx_%d = solite_bridge_window_new(%d, %d);\n",
             id, w, h);
 }
 
@@ -140,7 +140,7 @@ static void emit_text(JsxEmitContext *ctx, const JsxElement *el, int id)
     }
 
     emit_indent(ctx);
-    fprintf(ctx->out, "SolidGuiText *__jsx_%d = solid_bridge_text_new(\"%s\", %d, %d, %d, %d, %d);\n",
+    fprintf(ctx->out, "SoliteGuiText *__jsx_%d = solite_bridge_text_new(\"%s\", %d, %d, %d, %d, %d);\n",
             id, text, size, r, g, b, a);
 }
 
@@ -149,7 +149,7 @@ static void emit_button(JsxEmitContext *ctx, const JsxElement *el, int id)
     int w = get_int_attr(el, "width", 100);
     int h = get_int_attr(el, "height", 40);
     emit_indent(ctx);
-    fprintf(ctx->out, "SolidGuiButton *__jsx_%d = solid_bridge_button_new(%d, %d);\n",
+    fprintf(ctx->out, "SoliteGuiButton *__jsx_%d = solite_bridge_button_new(%d, %d);\n",
             id, w, h);
 }
 
@@ -159,7 +159,7 @@ static void emit_image(JsxEmitContext *ctx, const JsxElement *el, int id)
     int h = get_int_attr(el, "height", 100);
     int r = 0, g = 0, b = 0, a = 255;
     emit_indent(ctx);
-    fprintf(ctx->out, "SolidGuiImage *__jsx_%d = solid_bridge_image_new_color(%d, %d, %d, %d, %d, %d);\n",
+    fprintf(ctx->out, "SoliteGuiImage *__jsx_%d = solite_bridge_image_new_color(%d, %d, %d, %d, %d, %d);\n",
             id, w, h, r, g, b, a);
 }
 
@@ -178,13 +178,13 @@ static void emit_style_props(JsxEmitContext *ctx, const JsxElement *el, int id)
 
             if (strcmp(prop->name, "width") == 0) {
                 emit_indent(ctx);
-                fprintf(ctx->out, "solid_bridge_element_set_size_w(%s(__jsx_%d), %s);\n",
+                fprintf(ctx->out, "solite_bridge_element_set_size_w(%s(__jsx_%d), %s);\n",
                         as_el, id,
                         (prop->value && prop->value->kind == AST_EXPR_LITERAL)
                             ? prop->value->as.literal.as.text : "0");
             } else if (strcmp(prop->name, "height") == 0) {
                 emit_indent(ctx);
-                fprintf(ctx->out, "solid_bridge_element_set_size_h(%s(__jsx_%d), %s);\n",
+                fprintf(ctx->out, "solite_bridge_element_set_size_h(%s(__jsx_%d), %s);\n",
                         as_el, id,
                         (prop->value && prop->value->kind == AST_EXPR_LITERAL)
                             ? prop->value->as.literal.as.text : "0");
@@ -195,7 +195,7 @@ static void emit_style_props(JsxEmitContext *ctx, const JsxElement *el, int id)
                     parse_hex_color(prop->value->as.literal.as.text, &r, &g, &b, &a);
                 }
                 emit_indent(ctx);
-                fprintf(ctx->out, "solid_bridge_element_set_color(%s(__jsx_%d), %d, %d, %d, %d);\n",
+                fprintf(ctx->out, "solite_bridge_element_set_color(%s(__jsx_%d), %d, %d, %d, %d);\n",
                         as_el, id, r, g, b, a);
             } else if (strcmp(prop->name, "background-color") == 0) {
                 int r = 0, g = 0, b = 0, a = 255;
@@ -204,7 +204,7 @@ static void emit_style_props(JsxEmitContext *ctx, const JsxElement *el, int id)
                     parse_hex_color(prop->value->as.literal.as.text, &r, &g, &b, &a);
                 }
                 emit_indent(ctx);
-                fprintf(ctx->out, "solid_bridge_element_set_background_color(%s(__jsx_%d), %d, %d, %d, %d);\n",
+                fprintf(ctx->out, "solite_bridge_element_set_background_color(%s(__jsx_%d), %d, %d, %d, %d);\n",
                         as_el, id, r, g, b, a);
             }
             /* New CSS properties: add else-if cases here.
@@ -231,7 +231,7 @@ static void emit_event_handlers(JsxEmitContext *ctx, const JsxElement *el, int i
             int eff_id = next_effect_id(ctx);
             emit_indent(ctx);
             fprintf(ctx->out, "/* onClick handler for __jsx_%d — "
-                    "checked via solid_bridge_button_was_clicked() */\n", id);
+                    "checked via solite_bridge_button_was_clicked() */\n", id);
 
             /* Emit a flag/context for the click check in the frame loop */
             emit_indent(ctx);
@@ -256,7 +256,7 @@ static void emit_reactive_children(JsxEmitContext *ctx, const JsxElement *el,
             /* If this is a Text element, the expression updates SetText */
             if (strcmp(el->tag_name, "Text") == 0) {
                 emit_indent(ctx);
-                fprintf(ctx->out, "/* solid_create_effect(update_text_%d_fn, "
+                fprintf(ctx->out, "/* solite_create_effect(update_text_%d_fn, "
                         "&__jsx_%d); */\n", eff_id, id);
             }
         }
@@ -292,7 +292,7 @@ bool jsx_emit_element(JsxEmitContext *ctx, const JsxElement *element,
     } else {
         /* Unknown / component — emit as function call */
         emit_indent(ctx);
-        fprintf(ctx->out, "SolidGuiElement *__jsx_%d = __component_%s();\n",
+        fprintf(ctx->out, "SoliteGuiElement *__jsx_%d = __component_%s();\n",
                 id, element->tag_name);
     }
 
@@ -306,7 +306,7 @@ bool jsx_emit_element(JsxEmitContext *ctx, const JsxElement *element,
         const char *as_el = as_element_fn(element->tag_name);
         if (as_el[0] != '\0') {
             emit_indent(ctx);
-            fprintf(ctx->out, "solid_bridge_element_set_position(%s(__jsx_%d), %d, %d);\n",
+            fprintf(ctx->out, "solite_bridge_element_set_position(%s(__jsx_%d), %d, %d);\n",
                     as_el, id, x >= 0 ? x : 0, y >= 0 ? y : 0);
         }
     }
@@ -331,10 +331,10 @@ bool jsx_emit_element(JsxEmitContext *ctx, const JsxElement *element,
                 const char *child_as_el = as_element_fn(child->tag_name);
                 emit_indent(ctx);
                 if (child_as_el[0] != '\0') {
-                    fprintf(ctx->out, "solid_bridge_window_append(__jsx_%d, %s(__jsx_%d));\n",
+                    fprintf(ctx->out, "solite_bridge_window_append(__jsx_%d, %s(__jsx_%d));\n",
                             id, child_as_el, child_id);
                 } else {
-                    fprintf(ctx->out, "solid_bridge_window_append(__jsx_%d, __jsx_%d);\n",
+                    fprintf(ctx->out, "solite_bridge_window_append(__jsx_%d, __jsx_%d);\n",
                             id, child_id);
                 }
             }
@@ -344,7 +344,7 @@ bool jsx_emit_element(JsxEmitContext *ctx, const JsxElement *element,
                 strcmp(child->tag_name, "Text") == 0) {
                 int child_id = ctx->element_counter - 1;
                 emit_indent(ctx);
-                fprintf(ctx->out, "solid_bridge_button_set_label(__jsx_%d, __jsx_%d);\n",
+                fprintf(ctx->out, "solite_bridge_button_set_label(__jsx_%d, __jsx_%d);\n",
                         id, child_id);
             }
         }
@@ -362,7 +362,7 @@ bool jsx_emit_component(JsxEmitContext *ctx, const char *component_name,
                         const JsxElement *root)
 {
     fprintf(ctx->out, "\n/* Component: %s */\n", component_name);
-    fprintf(ctx->out, "SolidGuiWindow *__component_%s(void) {\n", component_name);
+    fprintf(ctx->out, "SoliteGuiWindow *__component_%s(void) {\n", component_name);
     ctx->indent = 1;
 
     /* Emit all elements */

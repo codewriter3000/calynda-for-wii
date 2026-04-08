@@ -520,8 +520,8 @@ $(HOST_RT_DIR)/mii.o: $(C_RUNTIME_DIR)/mii.c $(C_RUNTIME_DIR)/mii.h | $(HOST_RT_
 $(HOST_RT_DIR)/libcalynda_runtime.a: $(HOST_RT_OBJS)
 	ar rcs $@ $^
 
-SOLID_RT_INC = ../solid_runtime/include
-SOLID_RT_LIB = ../solid_runtime/build
+SOLITE_RT_INC = ../solite_runtime/include
+SOLITE_RT_LIB = ../solite_runtime/build
 
 host-runtime: $(HOST_RT_DIR)/libcalynda_runtime.a
 	cp $(C_RUNTIME_DIR)/calynda_runtime.h $(HOST_RT_DIR)/
@@ -529,13 +529,13 @@ host-runtime: $(HOST_RT_DIR)/libcalynda_runtime.a
 	cp $(C_RUNTIME_DIR)/calynda_wpad.h $(HOST_RT_DIR)/
 	cp $(C_RUNTIME_DIR)/calynda_mii.h $(HOST_RT_DIR)/
 	cp $(C_RUNTIME_DIR)/mii.h $(HOST_RT_DIR)/
-	cp $(SOLID_RT_INC)/solid_runtime.h $(HOST_RT_DIR)/
-	cp $(SOLID_RT_INC)/solid_signal.h $(HOST_RT_DIR)/
-	cp $(SOLID_RT_INC)/solid_effect.h $(HOST_RT_DIR)/
-	cp $(SOLID_RT_INC)/solid_control_flow.h $(HOST_RT_DIR)/
-	cp $(SOLID_RT_INC)/solid_style.h $(HOST_RT_DIR)/
-	cp $(SOLID_RT_INC)/solid_gui_bridge.h $(HOST_RT_DIR)/
-	if [ -f $(SOLID_RT_LIB)/libsolid_wii_host.a ]; then cp $(SOLID_RT_LIB)/libsolid_wii_host.a $(HOST_RT_DIR)/; fi
+	cp $(SOLITE_RT_INC)/solite_runtime.h $(HOST_RT_DIR)/
+	cp $(SOLITE_RT_INC)/solite_signal.h $(HOST_RT_DIR)/
+	cp $(SOLITE_RT_INC)/solite_effect.h $(HOST_RT_DIR)/
+	cp $(SOLITE_RT_INC)/solite_control_flow.h $(HOST_RT_DIR)/
+	cp $(SOLITE_RT_INC)/solite_style.h $(HOST_RT_DIR)/
+	cp $(SOLITE_RT_INC)/solite_gui_bridge.h $(HOST_RT_DIR)/
+	if [ -f $(SOLITE_RT_LIB)/libsolite_wii_host.a ]; then cp $(SOLITE_RT_LIB)/libsolite_wii_host.a $(HOST_RT_DIR)/; fi
 
 # ---------------------------------------------------------------
 # Wii runtime (cross-compiled with devkitPPC)
@@ -575,49 +575,49 @@ $(WII_RT_DIR)/libwiiuse.a: | $(WII_RT_DIR)
 	$(DEVKITPPC)/bin/powerpc-eabi-ar r $@ $(WII_RT_DIR)/wpad.o
 	rm -f $(WII_RT_DIR)/wpad.o
 
-SOLID_RT_SRC = ../solid_runtime/src
-SOLID_RT_BRIDGE = ../solid_runtime/bridge
+SOLITE_RT_SRC = ../solite_runtime/src
+SOLITE_RT_BRIDGE = ../solite_runtime/bridge
 LIBWIIGUI_DIR = ../libs/libwiigui
 LIBWIIGUI_SRC = $(LIBWIIGUI_DIR)/source
 LIBWIIGUI_BUILD = $(LIBWIIGUI_DIR)/build
 
-# Solid runtime Wii objects (cross-compiled)
-SOLID_WII_C_SRCS = solid_signal.c solid_effect.c solid_runtime.c solid_control_flow.c solid_style.c
-SOLID_WII_OBJS = $(patsubst %.c,$(WII_RT_DIR)/solid_%.o,$(subst solid_,,$(SOLID_WII_C_SRCS)))
+# Solite runtime Wii objects (cross-compiled)
+SOLITE_WII_C_SRCS = solite_signal.c solite_effect.c solite_runtime.c solite_control_flow.c solite_style.c
+SOLITE_WII_OBJS = $(patsubst %.c,$(WII_RT_DIR)/solite_%.o,$(subst solite_,,$(SOLITE_WII_C_SRCS)))
 
-SOLID_WII_CFLAGS = -DCALYNDA_WII_BUILD -Wall -Wextra -std=c11 -O2 \
-	-I$(SOLID_RT_INC) -I$(C_RUNTIME_DIR) $(WII_OGCINC)
+SOLITE_WII_CFLAGS = -DCALYNDA_WII_BUILD -Wall -Wextra -std=c11 -O2 \
+	-I$(SOLITE_RT_INC) -I$(C_RUNTIME_DIR) $(WII_OGCINC)
 
-SOLID_WII_CXXFLAGS = -DCALYNDA_WII_BUILD -DSOLID_HAS_LIBWIIGUI -DGEKKO \
+SOLITE_WII_CXXFLAGS = -DCALYNDA_WII_BUILD -DSOLITE_HAS_LIBWIIGUI -DGEKKO \
 	-mrvl -mcpu=750 -meabi -mhard-float \
 	-Wall -Wextra -std=c++11 -O2 \
-	-I$(SOLID_RT_INC) -I$(C_RUNTIME_DIR) \
+	-I$(SOLITE_RT_INC) -I$(C_RUNTIME_DIR) \
 	-I$(LIBWIIGUI_SRC) -I$(LIBWIIGUI_SRC)/libwiigui -I$(LIBWIIGUI_BUILD) \
 	$(WII_OGCINC) \
 	-I$(DEVKITPRO)/portlibs/ppc/include \
 	-I$(DEVKITPRO)/portlibs/ppc/include/freetype2
 
-$(WII_RT_DIR)/solid_signal.o: $(SOLID_RT_SRC)/solid_signal.c | $(WII_RT_DIR)
-	$(WII_CC) $(SOLID_WII_CFLAGS) -c $< -o $@
+$(WII_RT_DIR)/solite_signal.o: $(SOLITE_RT_SRC)/solite_signal.c | $(WII_RT_DIR)
+	$(WII_CC) $(SOLITE_WII_CFLAGS) -c $< -o $@
 
-$(WII_RT_DIR)/solid_effect.o: $(SOLID_RT_SRC)/solid_effect.c | $(WII_RT_DIR)
-	$(WII_CC) $(SOLID_WII_CFLAGS) -c $< -o $@
+$(WII_RT_DIR)/solite_effect.o: $(SOLITE_RT_SRC)/solite_effect.c | $(WII_RT_DIR)
+	$(WII_CC) $(SOLITE_WII_CFLAGS) -c $< -o $@
 
-$(WII_RT_DIR)/solid_runtime.o: $(SOLID_RT_SRC)/solid_runtime.c | $(WII_RT_DIR)
-	$(WII_CC) $(SOLID_WII_CFLAGS) -c $< -o $@
+$(WII_RT_DIR)/solite_runtime.o: $(SOLITE_RT_SRC)/solite_runtime.c | $(WII_RT_DIR)
+	$(WII_CC) $(SOLITE_WII_CFLAGS) -c $< -o $@
 
-$(WII_RT_DIR)/solid_control_flow.o: $(SOLID_RT_SRC)/solid_control_flow.c | $(WII_RT_DIR)
-	$(WII_CC) $(SOLID_WII_CFLAGS) -c $< -o $@
+$(WII_RT_DIR)/solite_control_flow.o: $(SOLITE_RT_SRC)/solite_control_flow.c | $(WII_RT_DIR)
+	$(WII_CC) $(SOLITE_WII_CFLAGS) -c $< -o $@
 
-$(WII_RT_DIR)/solid_style.o: $(SOLID_RT_SRC)/solid_style.c | $(WII_RT_DIR)
-	$(WII_CC) $(SOLID_WII_CFLAGS) -c $< -o $@
+$(WII_RT_DIR)/solite_style.o: $(SOLITE_RT_SRC)/solite_style.c | $(WII_RT_DIR)
+	$(WII_CC) $(SOLITE_WII_CFLAGS) -c $< -o $@
 
-$(WII_RT_DIR)/solid_gui_bridge.o: $(SOLID_RT_BRIDGE)/solid_gui_bridge.cpp | $(WII_RT_DIR) $(LIBWIIGUI_BUILD)/libwiigui.a
-	powerpc-eabi-g++ $(SOLID_WII_CXXFLAGS) -c $< -o $@
+$(WII_RT_DIR)/solite_gui_bridge.o: $(SOLITE_RT_BRIDGE)/solite_gui_bridge.cpp | $(WII_RT_DIR) $(LIBWIIGUI_BUILD)/libwiigui.a
+	powerpc-eabi-g++ $(SOLITE_WII_CXXFLAGS) -c $< -o $@
 
-$(WII_RT_DIR)/libsolid_wii.a: $(WII_RT_DIR)/solid_signal.o $(WII_RT_DIR)/solid_effect.o \
-	$(WII_RT_DIR)/solid_runtime.o $(WII_RT_DIR)/solid_control_flow.o \
-	$(WII_RT_DIR)/solid_style.o $(WII_RT_DIR)/solid_gui_bridge.o
+$(WII_RT_DIR)/libsolite_wii.a: $(WII_RT_DIR)/solite_signal.o $(WII_RT_DIR)/solite_effect.o \
+	$(WII_RT_DIR)/solite_runtime.o $(WII_RT_DIR)/solite_control_flow.o \
+	$(WII_RT_DIR)/solite_style.o $(WII_RT_DIR)/solite_gui_bridge.o
 	$(DEVKITPPC)/bin/powerpc-eabi-ar rcs $@ $^
 
 # Build libwiigui from source (uses its own Makefile, then extract the library)
@@ -629,19 +629,19 @@ $(LIBWIIGUI_BUILD)/libwiigui.a:
 		FreeTypeGX.o pngu.o oggplayer.o video.o input.o \
 		audio.o gettext.o wiidrc.o font.ttf.o
 
-wii-runtime: $(WII_RT_DIR)/libcalynda_runtime.a $(WII_RT_DIR)/libwiiuse.a $(WII_RT_DIR)/libsolid_wii.a $(LIBWIIGUI_BUILD)/libwiigui.a
+wii-runtime: $(WII_RT_DIR)/libcalynda_runtime.a $(WII_RT_DIR)/libwiiuse.a $(WII_RT_DIR)/libsolite_wii.a $(LIBWIIGUI_BUILD)/libwiigui.a
 	cp $(C_RUNTIME_DIR)/calynda_runtime.h $(WII_RT_DIR)/
 	cp $(C_RUNTIME_DIR)/calynda_gc.h $(WII_RT_DIR)/
 	cp $(C_RUNTIME_DIR)/calynda_wii_io.h $(WII_RT_DIR)/
 	cp $(C_RUNTIME_DIR)/calynda_wpad.h $(WII_RT_DIR)/
 	cp $(C_RUNTIME_DIR)/calynda_mii.h $(WII_RT_DIR)/
 	cp $(C_RUNTIME_DIR)/mii.h $(WII_RT_DIR)/
-	cp $(SOLID_RT_INC)/solid_runtime.h $(WII_RT_DIR)/
-	cp $(SOLID_RT_INC)/solid_signal.h $(WII_RT_DIR)/
-	cp $(SOLID_RT_INC)/solid_effect.h $(WII_RT_DIR)/
-	cp $(SOLID_RT_INC)/solid_control_flow.h $(WII_RT_DIR)/
-	cp $(SOLID_RT_INC)/solid_style.h $(WII_RT_DIR)/
-	cp $(SOLID_RT_INC)/solid_gui_bridge.h $(WII_RT_DIR)/
+	cp $(SOLITE_RT_INC)/solite_runtime.h $(WII_RT_DIR)/
+	cp $(SOLITE_RT_INC)/solite_signal.h $(WII_RT_DIR)/
+	cp $(SOLITE_RT_INC)/solite_effect.h $(WII_RT_DIR)/
+	cp $(SOLITE_RT_INC)/solite_control_flow.h $(WII_RT_DIR)/
+	cp $(SOLITE_RT_INC)/solite_style.h $(WII_RT_DIR)/
+	cp $(SOLITE_RT_INC)/solite_gui_bridge.h $(WII_RT_DIR)/
 	cp $(LIBWIIGUI_BUILD)/libwiigui.a $(WII_RT_DIR)/
 
 clean:

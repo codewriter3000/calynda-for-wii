@@ -97,6 +97,7 @@ typedef struct {
 
 Mii *loadMiis_Wii(void);
 Mii *loadMiis(char *data);
+Mii  loadMii_from_raw(int offset, char *data);
 
 #ifdef __cplusplus
    }

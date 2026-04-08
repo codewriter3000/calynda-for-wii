@@ -221,7 +221,7 @@ bool jsx_parse_style_object(JsxTokenizer *jt, JsxAttribute *attr)
     return true;
 }
 
-/* ---- CSS string parsing (Solid.js-style) ---- */
+/* ---- CSS string parsing (Solite-style) ---- */
 
 /*
  * Parse a CSS string like "color: #FFFFFF; background-color: #2D2D2D;"
@@ -349,7 +349,7 @@ bool jsx_parse_attributes(JsxTokenizer *jt, JsxElement *element)
 
         if (val.jsx_type == TOK_STRING_LIT) {
             if (strcmp(attr_name, "style") == 0) {
-                /* Solid.js-style string notation: style="color: #FFF; width: 100px;" */
+                /* Solite-style string notation: style="color: #FFF; width: 100px;" */
                 char *css_str = (val.length >= 2)
                     ? dup_str(val.start + 1, val.length - 2) : dup_str("", 0);
                 JsxAttribute attr;

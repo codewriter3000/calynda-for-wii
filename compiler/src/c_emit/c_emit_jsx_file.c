@@ -2,12 +2,12 @@
  * c_emit_jsx_file.c — Full-file Calynda+JSX to C transpiler.
  *
  * This module provides an alternative compilation path for Calynda
- * source files that contain Solid-inspired component/signal/JSX syntax.
+ * source files that contain Solite-inspired component/signal/JSX syntax.
  * It bypasses the normal parser→sema→HIR→emit pipeline and instead:
  *
  *   1. Tokenizes the entire file with the JSX-aware tokenizer.
  *   2. Walks the token stream to parse component + boot declarations.
- *   3. Emits C code targeting the solid_bridge_* / solid_* APIs.
+ *   3. Emits C code targeting the solite_bridge_* / solite_* APIs.
  *
  * Supported syntax:
  *   import io.gui;
@@ -96,8 +96,8 @@ static void jsx_skip_to_semicolon(JsxTokenizer *jt)
 
 /*
  * Rewrite a raw expression string, replacing signal references:
- *   count()             → (int)solid_signal_get(sig_count)
- *   set count(expr)     → solid_signal_set(sig_count, (CalyndaRtWord)(expr))
+ *   count()             → (int)solite_signal_get(sig_count)
+ *   set count(expr)     → solite_signal_set(sig_count, (CalyndaRtWord)(expr))
  */
 static char *rewrite_signal_expr(const char *raw, const SignalInfo *signals,
                                  int signal_count)
@@ -147,7 +147,7 @@ static char *rewrite_signal_expr(const char *raw, const SignalInfo *signals,
                     char *inner = jsx_dup_str(arg_start, (size_t)(q - arg_start));
                     char *rewritten_inner = rewrite_signal_expr(inner, signals,
                                                                 signal_count);
-                    APPENDS("solid_signal_set(sig_");
+                    APPENDS("solite_signal_set(sig_");
                     APPEND(signals[i].name, nlen);
                     APPENDS(", (CalyndaRtWord)(");
                     APPENDS(rewritten_inner);
@@ -171,7 +171,7 @@ static char *rewrite_signal_expr(const char *raw, const SignalInfo *signals,
                 if (at_boundary &&
                     strncmp(p, signals[i].name, nlen) == 0 &&
                     p[nlen] == '(' && p[nlen + 1] == ')') {
-                    APPENDS("(int)solid_signal_get(sig_");
+                    APPENDS("(int)solite_signal_get(sig_");
                     APPEND(signals[i].name, nlen);
                     APPENDS(")");
                     p += nlen + 2; /* skip "name()" */
@@ -296,7 +296,7 @@ static void emit_text_effects(FILE *out, const JsxElement *el,
         if (raw[0] == '`') {
             /* Build format string and arguments */
             fprintf(out,
-                    "typedef struct { SolidGuiText *text; } __eff_%d_ctx_t;\n"
+                    "typedef struct { SoliteGuiText *text; } __eff_%d_ctx_t;\n"
                     "static __eff_%d_ctx_t __eff_%d_ctx;\n",
                     eid, eid, eid);
 
@@ -346,7 +346,7 @@ static void emit_text_effects(FILE *out, const JsxElement *el,
 
             fprintf(out,
                     "    snprintf(buf, sizeof(buf), \"%s\", %s);\n"
-                    "    solid_bridge_text_set_text(ctx->text, buf);\n"
+                    "    solite_bridge_text_set_text(ctx->text, buf);\n"
                     "}\n\n",
                     fmt, args);
         } else {
@@ -363,7 +363,7 @@ static void emit_text_effects(FILE *out, const JsxElement *el,
             free(getter);
 
             fprintf(out,
-                    "typedef struct { SolidGuiText *text; } __eff_%d_ctx_t;\n"
+                    "typedef struct { SoliteGuiText *text; } __eff_%d_ctx_t;\n"
                     "static __eff_%d_ctx_t __eff_%d_ctx;\n",
                     eid, eid, eid);
 
@@ -372,7 +372,7 @@ static void emit_text_effects(FILE *out, const JsxElement *el,
                     "    __eff_%d_ctx_t *ctx = (__eff_%d_ctx_t *)ud;\n"
                     "    char buf[128];\n"
                     "    snprintf(buf, sizeof(buf), \"%%d\", %s);\n"
-                    "    solid_bridge_text_set_text(ctx->text, buf);\n"
+                    "    solite_bridge_text_set_text(ctx->text, buf);\n"
                     "}\n\n",
                     eid, eid, eid, rewritten);
 
@@ -414,7 +414,7 @@ static int emit_jsx_element_full(JsxFileContext *fctx,
                 if (strcmp(el->attributes[i].name, "height") == 0) h = val;
             }
         }
-        fprintf(out, "    SolidGuiWindow *__jsx_%d = solid_bridge_window_new(%d, %d);\n",
+        fprintf(out, "    SoliteGuiWindow *__jsx_%d = solite_bridge_window_new(%d, %d);\n",
                 id, w, h);
     } else if (strcmp(el->tag_name, "Image") == 0) {
         int w = 100, h = 100, r = 0, g = 0, b = 0, a = 255;
@@ -449,7 +449,7 @@ static int emit_jsx_element_full(JsxFileContext *fctx,
                 }
             }
         }
-        fprintf(out, "    SolidGuiImage *__jsx_%d = solid_bridge_image_new_color("
+        fprintf(out, "    SoliteGuiImage *__jsx_%d = solite_bridge_image_new_color("
                 "%d, %d, %d, %d, %d, %d);\n", id, w, h, r, g, b, a);
     } else if (strcmp(el->tag_name, "Text") == 0) {
         int size = 20, r = 255, g = 255, b = 255, a = 255;
@@ -498,7 +498,7 @@ static int emit_jsx_element_full(JsxFileContext *fctx,
                 break;
             }
         }
-        fprintf(out, "    SolidGuiText *__jsx_%d = solid_bridge_text_new("
+        fprintf(out, "    SoliteGuiText *__jsx_%d = solite_bridge_text_new("
                 "\"%s\", %d, %d, %d, %d, %d);\n", id, text, size, r, g, b, a);
     } else if (strcmp(el->tag_name, "Button") == 0) {
         int w = 100, h = 40;
@@ -512,7 +512,7 @@ static int emit_jsx_element_full(JsxFileContext *fctx,
                 if (strcmp(el->attributes[i].name, "height") == 0) h = val;
             }
         }
-        fprintf(out, "    SolidGuiButton *__jsx_%d = solid_bridge_button_new(%d, %d);\n",
+        fprintf(out, "    SoliteGuiButton *__jsx_%d = solite_bridge_button_new(%d, %d);\n",
                 id, w, h);
     } else if (strcmp(el->tag_name, "Pointer") == 0) {
         int channel = 0, size = 48;
@@ -549,15 +549,15 @@ static int emit_jsx_element_full(JsxFileContext *fctx,
             }
         }
         fprintf(out, "    /* Pointer cursor — channel %d, size %d */\n", channel, size);
-        fprintf(out, "    SolidGuiImage *__jsx_%d = solid_bridge_image_new_color("
+        fprintf(out, "    SoliteGuiImage *__jsx_%d = solite_bridge_image_new_color("
                 "%d, %d, %d, %d, %d, %d);\n", id, size, size, r, g, b, a);
-        fprintf(out, "    solid_bridge_element_set_alignment_top_left("
-                "solid_bridge_image_as_element(__jsx_%d));\n", id);
-        fprintf(out, "    solid_register_pointer(%d, "
-                "solid_bridge_image_as_element(__jsx_%d));\n", channel, id);
+        fprintf(out, "    solite_bridge_element_set_alignment_top_left("
+                "solite_bridge_image_as_element(__jsx_%d));\n", id);
+        fprintf(out, "    solite_register_pointer(%d, "
+                "solite_bridge_image_as_element(__jsx_%d));\n", channel, id);
     } else {
         /* Unknown element — emit as generic */
-        fprintf(out, "    SolidGuiElement *__jsx_%d = NULL; /* unknown: %s */\n",
+        fprintf(out, "    SoliteGuiElement *__jsx_%d = NULL; /* unknown: %s */\n",
                 id, el->tag_name);
     }
 
@@ -576,14 +576,14 @@ static int emit_jsx_element_full(JsxFileContext *fctx,
         }
         if (x >= 0 || y >= 0) {
             const char *as_el = NULL;
-            if (strcmp(el->tag_name, "Text") == 0) as_el = "solid_bridge_text_as_element";
-            else if (strcmp(el->tag_name, "Button") == 0) as_el = "solid_bridge_button_as_element";
-            else if (strcmp(el->tag_name, "Image") == 0) as_el = "solid_bridge_image_as_element";
+            if (strcmp(el->tag_name, "Text") == 0) as_el = "solite_bridge_text_as_element";
+            else if (strcmp(el->tag_name, "Button") == 0) as_el = "solite_bridge_button_as_element";
+            else if (strcmp(el->tag_name, "Image") == 0) as_el = "solite_bridge_image_as_element";
             if (as_el) {
-                fprintf(out, "    solid_bridge_element_set_alignment_top_left("
+                fprintf(out, "    solite_bridge_element_set_alignment_top_left("
                         "%s(__jsx_%d));\n",
                         as_el, id);
-                fprintf(out, "    solid_bridge_element_set_position("
+                fprintf(out, "    solite_bridge_element_set_position("
                         "%s(__jsx_%d), %d, %d);\n",
                         as_el, id, x >= 0 ? x : 0, y >= 0 ? y : 0);
             }
@@ -600,7 +600,7 @@ static int emit_jsx_element_full(JsxFileContext *fctx,
                 /* Find the handler in fctx->handlers */
                 for (int h = 0; h < fctx->handler_count; h++) {
                     if (fctx->handlers[h].body_text == el->attributes[i].raw_text) {
-                        fprintf(out, "    solid_bridge_button_set_click_handler(__jsx_%d, "
+                        fprintf(out, "    solite_bridge_button_set_click_handler(__jsx_%d, "
                                 "__handler_%d, NULL);\n",
                                 id, fctx->handlers[h].handler_id);
                         break;
@@ -622,20 +622,20 @@ static int emit_jsx_element_full(JsxFileContext *fctx,
             /* Append child to parent */
             const char *child_as = NULL;
             const char *child_tag = el->children[i].as.element->tag_name;
-            if (strcmp(child_tag, "Text") == 0) child_as = "solid_bridge_text_as_element";
-            else if (strcmp(child_tag, "Button") == 0) child_as = "solid_bridge_button_as_element";
-            else if (strcmp(child_tag, "Image") == 0) child_as = "solid_bridge_image_as_element";
-            else if (strcmp(child_tag, "Pointer") == 0) child_as = "solid_bridge_image_as_element";
+            if (strcmp(child_tag, "Text") == 0) child_as = "solite_bridge_text_as_element";
+            else if (strcmp(child_tag, "Button") == 0) child_as = "solite_bridge_button_as_element";
+            else if (strcmp(child_tag, "Image") == 0) child_as = "solite_bridge_image_as_element";
+            else if (strcmp(child_tag, "Pointer") == 0) child_as = "solite_bridge_image_as_element";
 
             if (strcmp(el->tag_name, "Window") == 0 && child_as) {
-                fprintf(out, "    solid_bridge_window_append(__jsx_%d, "
+                fprintf(out, "    solite_bridge_window_append(__jsx_%d, "
                         "%s(__jsx_%d));\n", id, child_as, child_id);
             }
 
             /* Button label */
             if (strcmp(el->tag_name, "Button") == 0 &&
                 strcmp(child_tag, "Text") == 0) {
-                fprintf(out, "    solid_bridge_button_set_label(__jsx_%d, __jsx_%d);\n",
+                fprintf(out, "    solite_bridge_button_set_label(__jsx_%d, __jsx_%d);\n",
                         id, child_id);
             }
         }
@@ -654,7 +654,7 @@ static int emit_jsx_element_full(JsxFileContext *fctx,
             if (has_signal) {
                 int eid = (*effect_counter);
                 fprintf(out, "    __eff_%d_ctx.text = __jsx_%d;\n", eid, id);
-                fprintf(out, "    solid_create_effect(__effect_%d_fn, &__eff_%d_ctx);\n",
+                fprintf(out, "    solite_create_effect(__effect_%d_fn, &__eff_%d_ctx);\n",
                         eid, eid);
                 (*effect_counter)++;
             }
@@ -750,7 +750,7 @@ static bool parse_and_emit_component(JsxFileContext *fctx, JsxTokenizer *jt)
 
     /* --- Emit signal globals (before effects/handlers that reference them) --- */
     for (int i = 0; i < signal_count; i++) {
-        fprintf(out, "static SolidSignal *sig_%s;\n", signals[i].name);
+        fprintf(out, "static SoliteSignal *sig_%s;\n", signals[i].name);
     }
     fprintf(out, "\n");
 
@@ -775,11 +775,11 @@ static bool parse_and_emit_component(JsxFileContext *fctx, JsxTokenizer *jt)
     extract_and_emit_handlers(fctx, root, signals, signal_count, 0);
 
     /* --- Emit component function --- */
-    fprintf(out, "static SolidGuiWindow *__component_%s(void) {\n", comp_name);
+    fprintf(out, "static SoliteGuiWindow *__component_%s(void) {\n", comp_name);
 
     /* Init signals */
     for (int i = 0; i < signal_count; i++) {
-        fprintf(out, "    sig_%s = solid_create_signal((CalyndaRtWord)(%s));\n",
+        fprintf(out, "    sig_%s = solite_create_signal((CalyndaRtWord)(%s));\n",
                 signals[i].name, signals[i].init_text);
     }
     fprintf(out, "\n");
@@ -839,7 +839,7 @@ static bool parse_and_emit_boot(JsxFileContext *fctx, JsxTokenizer *jt)
                     char *mname = jsx_dup_str(method.start, method.length);
 
                     if (strcmp(first, "gui") == 0 && strcmp(mname, "mount") == 0) {
-                        /* gui.mount(expr) → solid_mount(expr) */
+                        /* gui.mount(expr) → solite_mount(expr) */
                         if (!jsx_expect(jt, TOK_LPAREN)) { free(first); free(mname); return false; }
 
                         /* Parse the argument — expect ComponentName() */
@@ -850,9 +850,9 @@ static bool parse_and_emit_boot(JsxFileContext *fctx, JsxTokenizer *jt)
                             if (paren1.jsx_type == TOK_LPAREN) {
                                 jsx_expect(jt, TOK_RPAREN); /* () */
                             }
-                            fprintf(out, "    SolidGuiWindow *__root = __component_%s();\n",
+                            fprintf(out, "    SoliteGuiWindow *__root = __component_%s();\n",
                                     arg_name);
-                            fprintf(out, "    solid_mount(__root);\n");
+                            fprintf(out, "    solite_mount(__root);\n");
                             free(arg_name);
                         }
                         jsx_expect(jt, TOK_RPAREN); /* close gui.mount() */
@@ -911,7 +911,7 @@ int jsx_compile_to_c(const char *source, const char *path, FILE *out)
     /* File header */
     fprintf(out, "/* Generated by Calynda JSX compiler from %s */\n\n", path);
     fprintf(out, "#include \"calynda_runtime.h\"\n");
-    fprintf(out, "#include \"solid_runtime.h\"\n");
+    fprintf(out, "#include \"solite_runtime.h\"\n");
     fprintf(out, "#include <stdio.h>\n");
     fprintf(out, "#include <string.h>\n\n");
 
@@ -940,7 +940,7 @@ int jsx_compile_to_c(const char *source, const char *path, FILE *out)
         /* Ignore other tokens (comments in between) */
     }
 
-    /* Emit main() — solid_mount() is the event loop and does not return */
+    /* Emit main() — solite_mount() is the event loop and does not return */
     fprintf(out, "int main(int argc, char **argv) {\n");
     fprintf(out, "    (void)argc; (void)argv;\n");
     fprintf(out, "    calynda_rt_init();\n");

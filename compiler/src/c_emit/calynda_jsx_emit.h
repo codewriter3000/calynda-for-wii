@@ -5,7 +5,7 @@
  * calynda_jsx_emit.h — C code emitter for JSX elements.
  *
  * Transforms a JsxElement tree into C code that calls the
- * solid_bridge_* and solid_* runtime functions.
+ * solite_bridge_* and solite_* runtime functions.
  *
  * Example JSX:
  *   <Window width={640} height={480}>
@@ -13,13 +13,13 @@
  *   </Window>
  *
  * Emits:
- *   SolidGuiWindow *__jsx_0 = solid_bridge_window_new(640, 480);
- *   SolidGuiText *__jsx_1 = solid_bridge_text_new("", 20, 255, 255, 255, 255);
- *   solid_bridge_element_set_color(
- *       solid_bridge_text_as_element(__jsx_1), 255, 255, 255, 255);
- *   solid_create_effect(__jsx_1_text_effect, &__jsx_1_ctx);
- *   solid_bridge_window_append(__jsx_0,
- *       solid_bridge_text_as_element(__jsx_1));
+ *   SoliteGuiWindow *__jsx_0 = solite_bridge_window_new(640, 480);
+ *   SoliteGuiText *__jsx_1 = solite_bridge_text_new("", 20, 255, 255, 255, 255);
+ *   solite_bridge_element_set_color(
+ *       solite_bridge_text_as_element(__jsx_1), 255, 255, 255, 255);
+ *   solite_create_effect(__jsx_1_text_effect, &__jsx_1_ctx);
+ *   solite_bridge_window_append(__jsx_0,
+ *       solite_bridge_text_as_element(__jsx_1));
  */
 
 #include "calynda_jsx_ast.h"
