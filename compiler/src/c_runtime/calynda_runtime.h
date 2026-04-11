@@ -125,6 +125,9 @@ typedef struct {
 extern CalyndaRtPackage __calynda_pkg_stdlib;
 extern CalyndaRtPackage __calynda_pkg_wpad;
 extern CalyndaRtPackage __calynda_pkg_mii;
+extern CalyndaRtPackage __calynda_pkg_gfx;
+extern CalyndaRtPackage __calynda_pkg_physics;
+extern CalyndaRtPackage __calynda_pkg_motion;
 
 bool calynda_rt_is_object(CalyndaRtWord word);
 const CalyndaRtObjectHeader *calynda_rt_as_object(CalyndaRtWord word);

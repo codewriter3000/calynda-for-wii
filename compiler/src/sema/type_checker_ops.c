@@ -20,6 +20,10 @@ bool tc_check_binary_operator(TypeChecker *checker,
             *result_type = tc_checked_type_value(AST_PRIMITIVE_BOOL, 0);
             return true;
         }
+        if (left_type.kind == CHECKED_TYPE_EXTERNAL || right_type.kind == CHECKED_TYPE_EXTERNAL) {
+            *result_type = tc_checked_type_value(AST_PRIMITIVE_BOOL, 0);
+            return true;
+        }
         break;
 
     case AST_BINARY_OP_BIT_OR:
@@ -29,6 +33,12 @@ bool tc_check_binary_operator(TypeChecker *checker,
     case AST_BINARY_OP_BIT_AND:
         if (tc_checked_type_is_integral(left_type) && tc_checked_type_is_integral(right_type)) {
             *result_type = tc_promote_numeric_types(left_type, right_type);
+            return true;
+        }
+        if (left_type.kind == CHECKED_TYPE_EXTERNAL || right_type.kind == CHECKED_TYPE_EXTERNAL) {
+            *result_type = (left_type.kind != CHECKED_TYPE_EXTERNAL) ? left_type :
+                           (right_type.kind != CHECKED_TYPE_EXTERNAL) ? right_type :
+                           tc_checked_type_external();
             return true;
         }
         break;
@@ -53,12 +63,22 @@ bool tc_check_binary_operator(TypeChecker *checker,
             *result_type = tc_checked_type_value(AST_PRIMITIVE_BOOL, 0);
             return true;
         }
+        if (left_type.kind == CHECKED_TYPE_EXTERNAL || right_type.kind == CHECKED_TYPE_EXTERNAL) {
+            *result_type = tc_checked_type_value(AST_PRIMITIVE_BOOL, 0);
+            return true;
+        }
         break;
 
     case AST_BINARY_OP_SHIFT_LEFT:
     case AST_BINARY_OP_SHIFT_RIGHT:
         if (tc_checked_type_is_integral(left_type) && tc_checked_type_is_integral(right_type)) {
             *result_type = left_type;
+            return true;
+        }
+        if (left_type.kind == CHECKED_TYPE_EXTERNAL || right_type.kind == CHECKED_TYPE_EXTERNAL) {
+            *result_type = (left_type.kind != CHECKED_TYPE_EXTERNAL) ? left_type :
+                           (right_type.kind != CHECKED_TYPE_EXTERNAL) ? right_type :
+                           tc_checked_type_external();
             return true;
         }
         break;
@@ -72,6 +92,12 @@ bool tc_check_binary_operator(TypeChecker *checker,
             *result_type = tc_promote_numeric_types(left_type, right_type);
             return true;
         }
+        if (left_type.kind == CHECKED_TYPE_EXTERNAL || right_type.kind == CHECKED_TYPE_EXTERNAL) {
+            *result_type = (left_type.kind != CHECKED_TYPE_EXTERNAL) ? left_type :
+                           (right_type.kind != CHECKED_TYPE_EXTERNAL) ? right_type :
+                           tc_checked_type_external();
+            return true;
+        }
         break;
 
     case AST_BINARY_OP_SUBTRACT:
@@ -81,11 +107,23 @@ bool tc_check_binary_operator(TypeChecker *checker,
             *result_type = tc_promote_numeric_types(left_type, right_type);
             return true;
         }
+        if (left_type.kind == CHECKED_TYPE_EXTERNAL || right_type.kind == CHECKED_TYPE_EXTERNAL) {
+            *result_type = (left_type.kind != CHECKED_TYPE_EXTERNAL) ? left_type :
+                           (right_type.kind != CHECKED_TYPE_EXTERNAL) ? right_type :
+                           tc_checked_type_external();
+            return true;
+        }
         break;
 
     case AST_BINARY_OP_MODULO:
         if (tc_checked_type_is_integral(left_type) && tc_checked_type_is_integral(right_type)) {
             *result_type = tc_promote_numeric_types(left_type, right_type);
+            return true;
+        }
+        if (left_type.kind == CHECKED_TYPE_EXTERNAL || right_type.kind == CHECKED_TYPE_EXTERNAL) {
+            *result_type = (left_type.kind != CHECKED_TYPE_EXTERNAL) ? left_type :
+                           (right_type.kind != CHECKED_TYPE_EXTERNAL) ? right_type :
+                           tc_checked_type_external();
             return true;
         }
         break;

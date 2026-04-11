@@ -10,6 +10,9 @@
 #include "calynda_wpad.h"
 #include "calynda_mii.h"
 #include "calynda_gc.h"
+#include "calynda_gfx_bridge.h"
+#include "calynda_physics_bridge.h"
+#include "calynda_motion_bridge.h"
 
 #include <inttypes.h>
 #include <stdio.h>
@@ -253,7 +256,10 @@ const CalyndaRtObjectHeader *calynda_rt_as_object(CalyndaRtWord word) {
     }
     if (ptr == (const void *)&__calynda_pkg_stdlib ||
         ptr == (const void *)&STDOUT_PRINT_CALLABLE ||
-        ptr == (const void *)&__calynda_pkg_wpad) {
+        ptr == (const void *)&__calynda_pkg_wpad ||
+        ptr == (const void *)&__calynda_pkg_gfx ||
+        ptr == (const void *)&__calynda_pkg_physics ||
+        ptr == (const void *)&__calynda_pkg_motion) {
         return (const CalyndaRtObjectHeader *)ptr;
     }
     if (!registry_contains(ptr)) {
@@ -596,6 +602,15 @@ CalyndaRtWord __calynda_rt_call_callable(CalyndaRtWord callable,
     case CALYNDA_RT_OBJECT_EXTERN_CALLABLE: {
         const CalyndaRtExternCallable *ec =
             (const CalyndaRtExternCallable *)(const void *)h;
+        if ((int)ec->kind >= 500) {
+            return calynda_motion_dispatch(ec, argument_count, arguments);
+        }
+        if ((int)ec->kind >= 400) {
+            return calynda_physics_dispatch(ec, argument_count, arguments);
+        }
+        if ((int)ec->kind >= 300) {
+            return calynda_gfx_dispatch(ec, argument_count, arguments);
+        }
         if ((int)ec->kind >= 200) {
             return calynda_mii_dispatch(ec, argument_count, arguments);
         }
@@ -631,6 +646,18 @@ CalyndaRtWord __calynda_rt_member_load(CalyndaRtWord target, const char *member)
     }
     if (h == &__calynda_pkg_mii.header) {
         CalyndaRtWord result = calynda_mii_member_load(member);
+        if (result != 0) return result;
+    }
+    if (h == &__calynda_pkg_gfx.header) {
+        CalyndaRtWord result = calynda_gfx_member_load(member);
+        if (result != 0) return result;
+    }
+    if (h == &__calynda_pkg_physics.header) {
+        CalyndaRtWord result = calynda_physics_member_load(member);
+        if (result != 0) return result;
+    }
+    if (h == &__calynda_pkg_motion.header) {
+        CalyndaRtWord result = calynda_motion_member_load(member);
         if (result != 0) return result;
     }
     fprintf(stderr, "runtime: unsupported member load .%s\n", member);
@@ -733,6 +760,9 @@ void calynda_rt_init(void) {
     /* Register static objects so they pass as_object validation. */
     calynda_wpad_register_objects();
     calynda_mii_register_objects();
+    calynda_gfx_register_objects();
+    calynda_physics_register_objects();
+    calynda_motion_register_objects();
 }
 
 int calynda_rt_start_process(CalyndaRtProgramStartEntry entry, int argc, char **argv) {

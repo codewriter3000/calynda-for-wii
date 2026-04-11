@@ -39,7 +39,7 @@ HIR_DUMP_OBJS        = $(BUILD_DIR)/hir_dump.o $(BUILD_DIR)/hir_dump_helpers.o $
 RUNTIME_OBJS         = $(BUILD_DIR)/runtime.o $(BUILD_DIR)/runtime_names.o $(BUILD_DIR)/runtime_format.o $(BUILD_DIR)/runtime_ops.o $(BUILD_DIR)/runtime_union.o
 C_EMIT_OBJS          = $(BUILD_DIR)/c_emit.o $(BUILD_DIR)/c_emit_type.o $(BUILD_DIR)/c_emit_names.o $(BUILD_DIR)/c_emit_expr.o $(BUILD_DIR)/c_emit_stmt.o $(BUILD_DIR)/c_emit_closure.o $(BUILD_DIR)/calynda_jsx_emit.o $(BUILD_DIR)/c_emit_jsx_file.o
 JSX_OBJS             = $(BUILD_DIR)/calynda_jsx_tokenizer.o $(BUILD_DIR)/calynda_jsx_ast.o $(BUILD_DIR)/calynda_jsx_parser.o
-C_RUNTIME_OBJS       = $(BUILD_DIR)/calynda_gc_refcount.o $(BUILD_DIR)/calynda_runtime.o $(BUILD_DIR)/calynda_wpad.o $(BUILD_DIR)/calynda_mii.o $(BUILD_DIR)/mii.o
+C_RUNTIME_OBJS       = $(BUILD_DIR)/calynda_gc_refcount.o $(BUILD_DIR)/calynda_runtime.o $(BUILD_DIR)/calynda_wpad.o $(BUILD_DIR)/calynda_mii.o $(BUILD_DIR)/mii.o $(BUILD_DIR)/calynda_gfx_bridge.o $(BUILD_DIR)/calynda_physics_bridge.o $(BUILD_DIR)/calynda_motion_bridge.o
 DUMP_AST_OBJS        = $(BUILD_DIR)/dump_ast.o
 DUMP_SEMANTICS_OBJS  = $(BUILD_DIR)/dump_semantics.o
 CALYNDA_CLI_OBJS     = $(BUILD_DIR)/calynda.o $(BUILD_DIR)/calynda_compile.o $(BUILD_DIR)/calynda_utils.o
@@ -84,13 +84,24 @@ WII_CFLAGS = -Wall -std=c11 -O2 -mrvl -mcpu=750 -meabi -mhard-float -I$(C_RUNTIM
 WII_OGCINC = -I$(DEVKITPRO)/libogc/include
 WII_OGCLIB = -L$(DEVKITPRO)/libogc/lib/wii
 
+# Library paths (relative to compiler/)
+LIB_MATH_DIR  = ../libs/calynda_math
+LIB_GFX3D_DIR = ../libs/calynda_gfx3d
+LIB_PHYS_DIR  = ../libs/calynda_physics
+LIB_MOT_DIR   = ../libs/calynda_motion
+WII_LIB_INC   = -I$(LIB_MATH_DIR) -I$(LIB_GFX3D_DIR) -I$(LIB_PHYS_DIR) -I$(LIB_MOT_DIR)
+
 # Per-target runtime output directories
 HOST_RT_DIR = $(BUILD_DIR)/host
 WII_RT_DIR  = $(BUILD_DIR)/wii
 
 # Per-target runtime objects
-HOST_RT_OBJS = $(HOST_RT_DIR)/calynda_runtime.o $(HOST_RT_DIR)/calynda_gc_refcount.o $(HOST_RT_DIR)/calynda_wpad.o $(HOST_RT_DIR)/calynda_mii.o $(HOST_RT_DIR)/mii.o
-WII_RT_OBJS  = $(WII_RT_DIR)/calynda_runtime.o $(WII_RT_DIR)/calynda_gc_refcount.o $(WII_RT_DIR)/calynda_wpad.o $(WII_RT_DIR)/calynda_mii.o $(WII_RT_DIR)/mii.o $(WII_RT_DIR)/calynda_wii_io.o $(WII_RT_DIR)/calynda_wii_main.o
+HOST_RT_OBJS = $(HOST_RT_DIR)/calynda_runtime.o $(HOST_RT_DIR)/calynda_gc_refcount.o $(HOST_RT_DIR)/calynda_wpad.o $(HOST_RT_DIR)/calynda_mii.o $(HOST_RT_DIR)/mii.o $(HOST_RT_DIR)/calynda_gfx_bridge.o $(HOST_RT_DIR)/calynda_physics_bridge.o $(HOST_RT_DIR)/calynda_motion_bridge.o
+WII_RT_OBJS  = $(WII_RT_DIR)/calynda_runtime.o $(WII_RT_DIR)/calynda_gc_refcount.o $(WII_RT_DIR)/calynda_wpad.o $(WII_RT_DIR)/calynda_mii.o $(WII_RT_DIR)/mii.o $(WII_RT_DIR)/calynda_gfx_bridge.o $(WII_RT_DIR)/calynda_physics_bridge.o $(WII_RT_DIR)/calynda_motion_bridge.o $(WII_RT_DIR)/calynda_wii_io.o $(WII_RT_DIR)/calynda_wii_main.o \
+	$(WII_RT_DIR)/calynda_math.o \
+	$(WII_RT_DIR)/gfx3d_init.o $(WII_RT_DIR)/gfx3d_camera.o $(WII_RT_DIR)/gfx3d_mesh.o $(WII_RT_DIR)/gfx3d_texture.o $(WII_RT_DIR)/gfx3d_material.o $(WII_RT_DIR)/gfx3d_light.o $(WII_RT_DIR)/gfx3d_scene.o $(WII_RT_DIR)/gfx3d_skybox.o $(WII_RT_DIR)/gfx3d_particle.o $(WII_RT_DIR)/gfx3d_water.o $(WII_RT_DIR)/gfx3d_model.o $(WII_RT_DIR)/gfx3d_mii.o \
+	$(WII_RT_DIR)/calynda_physics.o \
+	$(WII_RT_DIR)/calynda_motion.o
 
 PREFIX ?= /usr/local
 INSTALL_BIN_DIR ?= $(PREFIX)/bin
@@ -354,7 +365,7 @@ $(BUILD_DIR)/calynda_jsx_parser.o: $(PARSER_DIR)/calynda_jsx_parser.c $(PARSER_D
 $(BUILD_DIR)/calynda_gc_refcount.o: $(C_RUNTIME_DIR)/calynda_gc_refcount.c $(C_RUNTIME_DIR)/calynda_gc.h | $(BUILD_DIR)
 	$(CC) $(CFLAGS) -c $< -o $@
 
-$(BUILD_DIR)/calynda_runtime.o: $(C_RUNTIME_DIR)/calynda_runtime.c $(C_RUNTIME_DIR)/calynda_runtime.h $(C_RUNTIME_DIR)/calynda_gc.h $(C_RUNTIME_DIR)/calynda_wpad.h $(C_RUNTIME_DIR)/calynda_mii.h | $(BUILD_DIR)
+$(BUILD_DIR)/calynda_runtime.o: $(C_RUNTIME_DIR)/calynda_runtime.c $(C_RUNTIME_DIR)/calynda_runtime.h $(C_RUNTIME_DIR)/calynda_gc.h $(C_RUNTIME_DIR)/calynda_wpad.h $(C_RUNTIME_DIR)/calynda_mii.h $(C_RUNTIME_DIR)/calynda_gfx_bridge.h $(C_RUNTIME_DIR)/calynda_physics_bridge.h $(C_RUNTIME_DIR)/calynda_motion_bridge.h | $(BUILD_DIR)
 	$(CC) $(CFLAGS) -c $< -o $@
 
 $(BUILD_DIR)/calynda_wpad.o: $(C_RUNTIME_DIR)/calynda_wpad.c $(C_RUNTIME_DIR)/calynda_wpad.h $(C_RUNTIME_DIR)/calynda_runtime.h | $(BUILD_DIR)
@@ -364,6 +375,15 @@ $(BUILD_DIR)/calynda_mii.o: $(C_RUNTIME_DIR)/calynda_mii.c $(C_RUNTIME_DIR)/caly
 	$(CC) $(CFLAGS) -c $< -o $@
 
 $(BUILD_DIR)/mii.o: $(C_RUNTIME_DIR)/mii.c $(C_RUNTIME_DIR)/mii.h | $(BUILD_DIR)
+	$(CC) $(CFLAGS) -c $< -o $@
+
+$(BUILD_DIR)/calynda_gfx_bridge.o: $(C_RUNTIME_DIR)/calynda_gfx_bridge.c $(C_RUNTIME_DIR)/calynda_gfx_bridge.h $(C_RUNTIME_DIR)/calynda_runtime.h | $(BUILD_DIR)
+	$(CC) $(CFLAGS) -c $< -o $@
+
+$(BUILD_DIR)/calynda_physics_bridge.o: $(C_RUNTIME_DIR)/calynda_physics_bridge.c $(C_RUNTIME_DIR)/calynda_physics_bridge.h $(C_RUNTIME_DIR)/calynda_runtime.h | $(BUILD_DIR)
+	$(CC) $(CFLAGS) -c $< -o $@
+
+$(BUILD_DIR)/calynda_motion_bridge.o: $(C_RUNTIME_DIR)/calynda_motion_bridge.c $(C_RUNTIME_DIR)/calynda_motion_bridge.h $(C_RUNTIME_DIR)/calynda_runtime.h | $(BUILD_DIR)
 	$(CC) $(CFLAGS) -c $< -o $@
 
 $(BUILD_DIR)/dump_ast.o: $(CLI_DIR)/dump_ast.c $(AST_DIR)/ast_dump.h $(PARSER_DIR)/parser.h $(AST_DIR)/ast.h $(TOKENIZER_DIR)/tokenizer.h | $(BUILD_DIR)
@@ -502,7 +522,7 @@ install: $(CALYNDA_BIN) host-runtime wii-runtime
 $(HOST_RT_DIR):
 	mkdir -p $(HOST_RT_DIR)
 
-$(HOST_RT_DIR)/calynda_runtime.o: $(C_RUNTIME_DIR)/calynda_runtime.c $(C_RUNTIME_DIR)/calynda_runtime.h $(C_RUNTIME_DIR)/calynda_gc.h $(C_RUNTIME_DIR)/calynda_wpad.h $(C_RUNTIME_DIR)/calynda_mii.h | $(HOST_RT_DIR)
+$(HOST_RT_DIR)/calynda_runtime.o: $(C_RUNTIME_DIR)/calynda_runtime.c $(C_RUNTIME_DIR)/calynda_runtime.h $(C_RUNTIME_DIR)/calynda_gc.h $(C_RUNTIME_DIR)/calynda_wpad.h $(C_RUNTIME_DIR)/calynda_mii.h $(C_RUNTIME_DIR)/calynda_gfx_bridge.h $(C_RUNTIME_DIR)/calynda_physics_bridge.h $(C_RUNTIME_DIR)/calynda_motion_bridge.h | $(HOST_RT_DIR)
 	$(CC) -Wall -std=c11 -O2 -I$(C_RUNTIME_DIR) -c $< -o $@
 
 $(HOST_RT_DIR)/calynda_gc_refcount.o: $(C_RUNTIME_DIR)/calynda_gc_refcount.c $(C_RUNTIME_DIR)/calynda_gc.h | $(HOST_RT_DIR)
@@ -517,6 +537,15 @@ $(HOST_RT_DIR)/calynda_mii.o: $(C_RUNTIME_DIR)/calynda_mii.c $(C_RUNTIME_DIR)/ca
 $(HOST_RT_DIR)/mii.o: $(C_RUNTIME_DIR)/mii.c $(C_RUNTIME_DIR)/mii.h | $(HOST_RT_DIR)
 	$(CC) -Wall -std=c11 -O2 -I$(C_RUNTIME_DIR) -c $< -o $@
 
+$(HOST_RT_DIR)/calynda_gfx_bridge.o: $(C_RUNTIME_DIR)/calynda_gfx_bridge.c $(C_RUNTIME_DIR)/calynda_gfx_bridge.h $(C_RUNTIME_DIR)/calynda_runtime.h | $(HOST_RT_DIR)
+	$(CC) -Wall -std=c11 -O2 -I$(C_RUNTIME_DIR) -c $< -o $@
+
+$(HOST_RT_DIR)/calynda_physics_bridge.o: $(C_RUNTIME_DIR)/calynda_physics_bridge.c $(C_RUNTIME_DIR)/calynda_physics_bridge.h $(C_RUNTIME_DIR)/calynda_runtime.h | $(HOST_RT_DIR)
+	$(CC) -Wall -std=c11 -O2 -I$(C_RUNTIME_DIR) -c $< -o $@
+
+$(HOST_RT_DIR)/calynda_motion_bridge.o: $(C_RUNTIME_DIR)/calynda_motion_bridge.c $(C_RUNTIME_DIR)/calynda_motion_bridge.h $(C_RUNTIME_DIR)/calynda_runtime.h | $(HOST_RT_DIR)
+	$(CC) -Wall -std=c11 -O2 -I$(C_RUNTIME_DIR) -c $< -o $@
+
 $(HOST_RT_DIR)/libcalynda_runtime.a: $(HOST_RT_OBJS)
 	ar rcs $@ $^
 
@@ -529,6 +558,9 @@ host-runtime: $(HOST_RT_DIR)/libcalynda_runtime.a
 	cp $(C_RUNTIME_DIR)/calynda_wpad.h $(HOST_RT_DIR)/
 	cp $(C_RUNTIME_DIR)/calynda_mii.h $(HOST_RT_DIR)/
 	cp $(C_RUNTIME_DIR)/mii.h $(HOST_RT_DIR)/
+	cp $(C_RUNTIME_DIR)/calynda_gfx_bridge.h $(HOST_RT_DIR)/
+	cp $(C_RUNTIME_DIR)/calynda_physics_bridge.h $(HOST_RT_DIR)/
+	cp $(C_RUNTIME_DIR)/calynda_motion_bridge.h $(HOST_RT_DIR)/
 	cp $(SOLITE_RT_INC)/solite_runtime.h $(HOST_RT_DIR)/
 	cp $(SOLITE_RT_INC)/solite_signal.h $(HOST_RT_DIR)/
 	cp $(SOLITE_RT_INC)/solite_effect.h $(HOST_RT_DIR)/
@@ -543,7 +575,7 @@ host-runtime: $(HOST_RT_DIR)/libcalynda_runtime.a
 $(WII_RT_DIR):
 	mkdir -p $(WII_RT_DIR)
 
-$(WII_RT_DIR)/calynda_runtime.o: $(C_RUNTIME_DIR)/calynda_runtime.c $(C_RUNTIME_DIR)/calynda_runtime.h $(C_RUNTIME_DIR)/calynda_gc.h $(C_RUNTIME_DIR)/calynda_wpad.h $(C_RUNTIME_DIR)/calynda_mii.h | $(WII_RT_DIR)
+$(WII_RT_DIR)/calynda_runtime.o: $(C_RUNTIME_DIR)/calynda_runtime.c $(C_RUNTIME_DIR)/calynda_runtime.h $(C_RUNTIME_DIR)/calynda_gc.h $(C_RUNTIME_DIR)/calynda_wpad.h $(C_RUNTIME_DIR)/calynda_mii.h $(C_RUNTIME_DIR)/calynda_gfx_bridge.h $(C_RUNTIME_DIR)/calynda_physics_bridge.h $(C_RUNTIME_DIR)/calynda_motion_bridge.h | $(WII_RT_DIR)
 	$(WII_CC) $(WII_CFLAGS) $(WII_OGCINC) -c $< -o $@
 
 $(WII_RT_DIR)/calynda_gc_refcount.o: $(C_RUNTIME_DIR)/calynda_gc_refcount.c $(C_RUNTIME_DIR)/calynda_gc.h | $(WII_RT_DIR)
@@ -558,11 +590,69 @@ $(WII_RT_DIR)/calynda_mii.o: $(C_RUNTIME_DIR)/calynda_mii.c $(C_RUNTIME_DIR)/cal
 $(WII_RT_DIR)/mii.o: $(C_RUNTIME_DIR)/mii.c $(C_RUNTIME_DIR)/mii.h | $(WII_RT_DIR)
 	$(WII_CC) $(WII_CFLAGS) $(WII_OGCINC) -DCALYNDA_WII_BUILD -c $< -o $@
 
+$(WII_RT_DIR)/calynda_gfx_bridge.o: $(C_RUNTIME_DIR)/calynda_gfx_bridge.c $(C_RUNTIME_DIR)/calynda_gfx_bridge.h $(C_RUNTIME_DIR)/calynda_runtime.h | $(WII_RT_DIR)
+	$(WII_CC) $(WII_CFLAGS) $(WII_OGCINC) $(WII_LIB_INC) -DCALYNDA_WII_BUILD -c $< -o $@
+
+$(WII_RT_DIR)/calynda_physics_bridge.o: $(C_RUNTIME_DIR)/calynda_physics_bridge.c $(C_RUNTIME_DIR)/calynda_physics_bridge.h $(C_RUNTIME_DIR)/calynda_runtime.h | $(WII_RT_DIR)
+	$(WII_CC) $(WII_CFLAGS) $(WII_OGCINC) $(WII_LIB_INC) -DCALYNDA_WII_BUILD -c $< -o $@
+
+$(WII_RT_DIR)/calynda_motion_bridge.o: $(C_RUNTIME_DIR)/calynda_motion_bridge.c $(C_RUNTIME_DIR)/calynda_motion_bridge.h $(C_RUNTIME_DIR)/calynda_runtime.h | $(WII_RT_DIR)
+	$(WII_CC) $(WII_CFLAGS) $(WII_OGCINC) $(WII_LIB_INC) -DCALYNDA_WII_BUILD -c $< -o $@
+
 $(WII_RT_DIR)/calynda_wii_io.o: $(C_RUNTIME_DIR)/calynda_wii_io.c $(C_RUNTIME_DIR)/calynda_wii_io.h | $(WII_RT_DIR)
 	$(WII_CC) $(WII_CFLAGS) $(WII_OGCINC) -c $< -o $@
 
 $(WII_RT_DIR)/calynda_wii_main.o: $(C_RUNTIME_DIR)/calynda_wii_main.c $(C_RUNTIME_DIR)/calynda_wii_io.h $(C_RUNTIME_DIR)/calynda_runtime.h | $(WII_RT_DIR)
 	$(WII_CC) $(WII_CFLAGS) $(WII_OGCINC) -c $< -o $@
+
+# ---------------------------------------------------------------
+# Wii library objects (calynda_math, gfx3d, physics, motion)
+# ---------------------------------------------------------------
+
+$(WII_RT_DIR)/calynda_math.o: $(LIB_MATH_DIR)/calynda_math.c $(LIB_MATH_DIR)/calynda_math.h | $(WII_RT_DIR)
+	$(WII_CC) $(WII_CFLAGS) -I$(LIB_MATH_DIR) -c $< -o $@
+
+$(WII_RT_DIR)/gfx3d_init.o: $(LIB_GFX3D_DIR)/gfx3d_init.c | $(WII_RT_DIR)
+	$(WII_CC) $(WII_CFLAGS) $(WII_OGCINC) $(WII_LIB_INC) -DCALYNDA_WII_BUILD -c $< -o $@
+
+$(WII_RT_DIR)/gfx3d_camera.o: $(LIB_GFX3D_DIR)/gfx3d_camera.c | $(WII_RT_DIR)
+	$(WII_CC) $(WII_CFLAGS) $(WII_OGCINC) $(WII_LIB_INC) -DCALYNDA_WII_BUILD -c $< -o $@
+
+$(WII_RT_DIR)/gfx3d_mesh.o: $(LIB_GFX3D_DIR)/gfx3d_mesh.c | $(WII_RT_DIR)
+	$(WII_CC) $(WII_CFLAGS) $(WII_OGCINC) $(WII_LIB_INC) -DCALYNDA_WII_BUILD -c $< -o $@
+
+$(WII_RT_DIR)/gfx3d_texture.o: $(LIB_GFX3D_DIR)/gfx3d_texture.c | $(WII_RT_DIR)
+	$(WII_CC) $(WII_CFLAGS) $(WII_OGCINC) $(WII_LIB_INC) -DCALYNDA_WII_BUILD -c $< -o $@
+
+$(WII_RT_DIR)/gfx3d_material.o: $(LIB_GFX3D_DIR)/gfx3d_material.c | $(WII_RT_DIR)
+	$(WII_CC) $(WII_CFLAGS) $(WII_OGCINC) $(WII_LIB_INC) -DCALYNDA_WII_BUILD -c $< -o $@
+
+$(WII_RT_DIR)/gfx3d_light.o: $(LIB_GFX3D_DIR)/gfx3d_light.c | $(WII_RT_DIR)
+	$(WII_CC) $(WII_CFLAGS) $(WII_OGCINC) $(WII_LIB_INC) -DCALYNDA_WII_BUILD -c $< -o $@
+
+$(WII_RT_DIR)/gfx3d_scene.o: $(LIB_GFX3D_DIR)/gfx3d_scene.c | $(WII_RT_DIR)
+	$(WII_CC) $(WII_CFLAGS) $(WII_OGCINC) $(WII_LIB_INC) -DCALYNDA_WII_BUILD -c $< -o $@
+
+$(WII_RT_DIR)/gfx3d_skybox.o: $(LIB_GFX3D_DIR)/gfx3d_skybox.c | $(WII_RT_DIR)
+	$(WII_CC) $(WII_CFLAGS) $(WII_OGCINC) $(WII_LIB_INC) -DCALYNDA_WII_BUILD -c $< -o $@
+
+$(WII_RT_DIR)/gfx3d_particle.o: $(LIB_GFX3D_DIR)/gfx3d_particle.c | $(WII_RT_DIR)
+	$(WII_CC) $(WII_CFLAGS) $(WII_OGCINC) $(WII_LIB_INC) -DCALYNDA_WII_BUILD -c $< -o $@
+
+$(WII_RT_DIR)/gfx3d_water.o: $(LIB_GFX3D_DIR)/gfx3d_water.c | $(WII_RT_DIR)
+	$(WII_CC) $(WII_CFLAGS) $(WII_OGCINC) $(WII_LIB_INC) -DCALYNDA_WII_BUILD -c $< -o $@
+
+$(WII_RT_DIR)/gfx3d_model.o: $(LIB_GFX3D_DIR)/gfx3d_model.c | $(WII_RT_DIR)
+	$(WII_CC) $(WII_CFLAGS) $(WII_OGCINC) $(WII_LIB_INC) -DCALYNDA_WII_BUILD -c $< -o $@
+
+$(WII_RT_DIR)/gfx3d_mii.o: $(LIB_GFX3D_DIR)/gfx3d_mii.c | $(WII_RT_DIR)
+	$(WII_CC) $(WII_CFLAGS) $(WII_OGCINC) $(WII_LIB_INC) -DCALYNDA_WII_BUILD -c $< -o $@
+
+$(WII_RT_DIR)/calynda_physics.o: $(LIB_PHYS_DIR)/calynda_physics.c $(LIB_PHYS_DIR)/calynda_physics.h | $(WII_RT_DIR)
+	$(WII_CC) $(WII_CFLAGS) -I$(LIB_PHYS_DIR) -I$(LIB_MATH_DIR) -c $< -o $@
+
+$(WII_RT_DIR)/calynda_motion.o: $(LIB_MOT_DIR)/calynda_motion.c $(LIB_MOT_DIR)/calynda_motion.h | $(WII_RT_DIR)
+	$(WII_CC) $(WII_CFLAGS) -I$(LIB_MOT_DIR) -I$(LIB_MATH_DIR) -c $< -o $@
 
 $(WII_RT_DIR)/libcalynda_runtime.a: $(WII_RT_OBJS)
 	$(DEVKITPPC)/bin/powerpc-eabi-ar rcs $@ $^

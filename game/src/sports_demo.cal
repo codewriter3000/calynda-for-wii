@@ -39,15 +39,6 @@ var floor_body = 0;
 var has_thrown  = false;
 var score      = 0;
 
-/* Mesh handles */
-var pin_mesh   = 0;
-var ball_mesh  = 0;
-var lane_mesh  = 0;
-
-/* Scene node indices: pins 0..9, ball 10, lane 11 */
-var BALL_NODE = 10;
-var LANE_NODE = 11;
-
 /* ------------------------------------------------------------------ */
 /* Recursive helpers (no loops in Calynda — use recursion)              */
 /* ------------------------------------------------------------------ */
@@ -74,7 +65,7 @@ var reset_pins = (int32 i) -> {
 };
 
 /* Count fallen pins (Y position below threshold), accumulator style */
-int32 count_fallen = (int32 i, int32 n) -> {
+var count_fallen = (int32 i, int32 n) -> {
     return (i < 10) ?
         count_fallen(
             i + 1,
@@ -84,21 +75,13 @@ int32 count_fallen = (int32 i, int32 n) -> {
         : n;
 };
 
-/* Update each pin node position from physics */
-var update_pins = (int32 i) -> {
+/* Draw each pin at its physics position */
+var draw_pins = (int32 i) -> {
     var px = physics.body_get_pos_x(pin_bodies[i]);
     var py = physics.body_get_pos_y(pin_bodies[i]);
     var pz = physics.body_get_pos_z(pin_bodies[i]);
     gfx.node_set_pos(i, px, py, pz);
-    (i + 1 < 10) ? update_pins(i + 1) : 0;
-};
-
-/* Create scene nodes for pins[i..9] and attach mesh + material */
-var create_pin_nodes = (int32 i) -> {
-    gfx.scene_create_node();
-    gfx.node_set_scale(i, 0.06, PIN_HEIGHT, 0.06);
-    gfx.node_set_mesh(i, pin_mesh);
-    (i + 1 < 10) ? create_pin_nodes(i + 1) : 0;
+    (i + 1 < 10) ? draw_pins(i + 1) : 0;
 };
 
 /* ------------------------------------------------------------------ */
@@ -122,34 +105,6 @@ var setup = () -> {
     gfx.light_add_directional(0.0, -1.0, -0.5, 1.0, 1.0, 0.95);
     gfx.light_add_point(0.0, 3.0, 0.0 - LANE_LENGTH * 0.5, 0.8, 0.8, 0.7, 8.0);
     gfx.lights_apply();
-
-    /* Create meshes */
-    pin_mesh  = gfx.mesh_create_cube();
-    ball_mesh = gfx.mesh_create_sphere(BALL_RADIUS, 12, 8);
-    lane_mesh = gfx.mesh_create_plane(2.0, LANE_LENGTH, 1, 4);
-
-    /* --- Scene nodes ---
-       Pin nodes: index 0..9
-       Ball node: index 10
-       Lane node: index 11
-    */
-
-    /* Pin nodes — white cubes scaled to pin shape */
-    gfx.material_set_mode(0);
-    gfx.material_apply(1.0, 1.0, 1.0);
-    create_pin_nodes(0);
-
-    /* Ball node — dark sphere */
-    gfx.scene_create_node();
-    gfx.material_apply(0.1, 0.1, 0.1);
-    gfx.node_set_mesh(BALL_NODE, ball_mesh);
-
-    /* Lane node — tan floor plane */
-    gfx.scene_create_node();
-    gfx.material_set_mode(2);
-    gfx.material_apply(0.85, 0.75, 0.55);
-    gfx.node_set_mesh(LANE_NODE, lane_mesh);
-    gfx.node_set_pos(LANE_NODE, 0.0, 0.0, 0.0 - LANE_LENGTH * 0.5);
 
     /* Static floor */
     floor_body = physics.body_create_static(
@@ -178,7 +133,6 @@ var throw_ball = () -> {
     /* Launch down the lane with slight curve from aim */
     physics.body_set_velocity(ball_body, aim_x, 0.0, -8.0);
     has_thrown = true;
-    return 0;
 };
 
 var reset_lane = () -> {
@@ -188,7 +142,6 @@ var reset_lane = () -> {
     physics.body_set_pos(ball_body, 0.0, BALL_RADIUS, 0.0);
     physics.body_set_velocity(ball_body, 0.0, 0.0, 0.0);
     has_thrown = false;
-    return 0;
 };
 
 /* ------------------------------------------------------------------ */
@@ -200,17 +153,20 @@ var draw_scene = () -> {
     gfx.setup_3d();
     gfx.camera_apply();
 
-    /* Update pin positions from physics */
-    update_pins(0);
+    /* Lane floor */
+    gfx.material_set_mode(2);
+    gfx.material_apply(0.85, 0.75, 0.55);
 
-    /* Update ball position from physics */
+    /* Pins */
+    gfx.material_set_mode(0);
+    gfx.material_apply(1.0, 1.0, 1.0);
+    draw_pins(0);
+
+    /* Ball */
+    gfx.material_apply(0.1, 0.1, 0.1);
     var bx = physics.body_get_pos_x(ball_body);
     var by = physics.body_get_pos_y(ball_body);
     var bz = physics.body_get_pos_z(ball_body);
-    gfx.node_set_pos(BALL_NODE, bx, by, bz);
-
-    /* Render all scene nodes (pins + ball + lane) */
-    gfx.scene_render();
 
     /* HUD */
     gfx.setup_2d();

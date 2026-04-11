@@ -128,14 +128,16 @@ const TypeCheckInfo *tc_resolve_symbol_info(TypeChecker *checker,
         resolved_info = tc_type_check_info_make(tc_checked_type_from_ast_type(checker,
                                                                               symbol->declared_type));
         if (checker->has_error) {
-            entry->is_resolving = false;
+            entry = tc_ensure_symbol_entry(checker, symbol);
+            if (entry) { entry->is_resolving = false; }
             return NULL;
         }
         if (resolved_info.type.kind == CHECKED_TYPE_VOID) {
             tc_set_error_at(checker, symbol->declaration_span, NULL,
                             "Parameter '%s' cannot have type void.",
                             symbol->name ? symbol->name : "<anonymous>");
-            entry->is_resolving = false;
+            entry = tc_ensure_symbol_entry(checker, symbol);
+            if (entry) { entry->is_resolving = false; }
             return NULL;
         }
         break;
@@ -147,7 +149,8 @@ const TypeCheckInfo *tc_resolve_symbol_info(TypeChecker *checker,
                                        ((const AstBindingDecl *)symbol->declaration)->is_inferred_type,
                                        ((const AstBindingDecl *)symbol->declaration)->initializer,
                                        &resolved_info)) {
-            entry->is_resolving = false;
+            entry = tc_ensure_symbol_entry(checker, symbol);
+            if (entry) { entry->is_resolving = false; }
             return NULL;
         }
         break;
@@ -156,7 +159,8 @@ const TypeCheckInfo *tc_resolve_symbol_info(TypeChecker *checker,
         /* Extern C declaration: treat as a callable with external linkage. */
         CheckedType return_type = tc_checked_type_from_ast_type(checker, symbol->declared_type);
         if (checker->has_error) {
-            entry->is_resolving = false;
+            entry = tc_ensure_symbol_entry(checker, symbol);
+            if (entry) { entry->is_resolving = false; }
             return NULL;
         }
         resolved_info = tc_type_check_info_make_external_callable();
@@ -171,7 +175,8 @@ const TypeCheckInfo *tc_resolve_symbol_info(TypeChecker *checker,
                                        ((const AstLocalBindingStatement *)symbol->declaration)->is_inferred_type,
                                        ((const AstLocalBindingStatement *)symbol->declaration)->initializer,
                                        &resolved_info)) {
-            entry->is_resolving = false;
+            entry = tc_ensure_symbol_entry(checker, symbol);
+            if (entry) { entry->is_resolving = false; }
             return NULL;
         }
         break;
@@ -186,6 +191,12 @@ const TypeCheckInfo *tc_resolve_symbol_info(TypeChecker *checker,
         break;
     }
 
+    /* Re-fetch entry: symbol_entries may have been reallocated during
+       nested symbol resolution above. */
+    entry = tc_ensure_symbol_entry(checker, symbol);
+    if (!entry) {
+        return NULL;
+    }
     entry->info = resolved_info;
     entry->is_resolving = false;
     entry->is_resolved = true;

@@ -16,6 +16,14 @@ static bool emit_file_header(FILE *out) {
     fputs("#include <stdio.h>\n", out);
     fputs("#include \"calynda_runtime.h\"\n", out);
     fputc('\n', out);
+    fputs("static inline CalyndaRtWord __calynda_float_to_word(float f) {\n", out);
+    fputs("    union { float f; uint32_t u; } __cvt; __cvt.f = f;\n", out);
+    fputs("    return (CalyndaRtWord)__cvt.u;\n", out);
+    fputs("}\n\n", out);
+    fputs("static inline float __calynda_word_to_float(CalyndaRtWord w) {\n", out);
+    fputs("    union { uint32_t u; float f; } __cvt; __cvt.u = (uint32_t)w;\n", out);
+    fputs("    return __cvt.f;\n", out);
+    fputs("}\n\n", out);
     return true;
 }
 

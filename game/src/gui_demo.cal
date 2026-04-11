@@ -1,0 +1,80 @@
+/*
+ * main.cal — Minimal counter GUI with Wii remote pointer.
+ *
+ * Point your Wii remote at the screen to see a cursor.
+ * Click [+], [-], or [Reset] to change the counter.
+ *
+ * This Calynda + Solite JSX compiles to C bridge calls
+ * (see game/src/counter_gui.c for the generated output).
+ */
+import io.gui;
+
+component Counter = () -> {
+    signal count = 0;
+
+    return (
+        <Window width={640} height={480}>
+            /* Dark background */
+            <Image
+                width={640}
+                height={480}
+                style="background-color: #2D2D2D;"
+            />
+
+            /* Title */
+            <Text
+                size={30}
+                x={200}
+                y={40}
+                style="color: #00CCFF;">
+                {"Calynda Counter"}
+            </Text>
+
+            /* Reactive counter display — updates when count() changes */
+            <Text
+                size={36}
+                x={230}
+                y={140}
+                style="color: #FFFFFF;">
+                {count}
+            </Text>
+
+            /* Increment */
+            <Button
+                width={120}
+                height={60}
+                x={140}
+                y={250}
+                onClick={() -> set count(count() + 1)}>
+                <Text size={28} style="color: #FFFFFF;">{"+"}</Text>
+            </Button>
+
+            /* Decrement */
+            <Button
+                width={120}
+                height={60}
+                x={260}
+                y={250}
+                onClick={() -> set count(count() > 0 ? count() - 1 : 0)}>
+                <Text size={28} style="color: #FFFFFF;">{"-"}</Text>
+            </Button>
+
+            /* Reset */
+            <Button
+                width={120}
+                height={60}
+                x={380}
+                y={250}
+                onClick={(buttons) -> set count(0)}>
+                <Text size={22} style="color: #FFFFFF;">{"Reset"}</Text>
+            </Button>
+
+            /* Wii remote pointer cursor — tracks IR position from channel 0 */
+            <Pointer channel={0} size={48} style="color: #FFFFFFCC;" />
+        </Window>
+    );
+};
+
+boot() -> {
+    gui.mount(Counter());
+};
