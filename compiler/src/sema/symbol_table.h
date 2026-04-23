@@ -48,6 +48,8 @@ struct Symbol {
     size_t          variant_index;
     bool            variant_has_payload;
     const AstType  *variant_payload_type;
+    /* SYMBOL_KIND_IMPORT wildcard fields */
+    bool            is_wildcard_import; /* sentinel: module-level wildcard */
 };
 
 struct Scope {

@@ -182,6 +182,7 @@ Statement
     | ExitStatement
     | ThrowStatement
     | LocalBindingStatement
+    | ManualStatement
     | ExpressionStatement
     ;
 
@@ -203,6 +204,15 @@ LocalBindingStatement
 
 ExpressionStatement
     = Expression ";"
+    ;
+
+(*                                                                  *)
+(* FORK ADDITION: manual blocks for raw pointer / memory operations *)
+(*   manual { ... };                                                *)
+(*   manual checked { ... };  — bounds-checked variant              *)
+(*                                                                  *)
+ManualStatement
+    = "manual" [ "checked" ] Block ";"
     ;
 
 

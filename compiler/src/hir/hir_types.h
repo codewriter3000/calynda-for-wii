@@ -14,12 +14,18 @@ typedef struct {
     HirExpression *initializer;
 } HirLocalBinding;
 
+typedef struct {
+    HirBlock *body;
+    bool      is_checked;
+} HirManualBlock;
+
 typedef enum {
     HIR_STMT_LOCAL_BINDING = 0,
     HIR_STMT_RETURN,
     HIR_STMT_EXIT,
     HIR_STMT_THROW,
-    HIR_STMT_EXPRESSION
+    HIR_STMT_EXPRESSION,
+    HIR_STMT_MANUAL
 } HirStatementKind;
 
 struct HirStatement {
@@ -30,6 +36,7 @@ struct HirStatement {
         HirExpression  *return_expression;
         HirExpression  *throw_expression;
         HirExpression  *expression;
+        HirManualBlock  manual;
     } as;
 };
 

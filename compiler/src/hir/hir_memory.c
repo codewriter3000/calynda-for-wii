@@ -100,9 +100,7 @@ void hir_block_free(HirBlock *block) {
 }
 
 void hir_statement_free(HirStatement *statement) {
-    if (!statement) {
-        return;
-    }
+    if (!statement) { return; }
 
     switch (statement->kind) {
     case HIR_STMT_LOCAL_BINDING:
@@ -113,16 +111,14 @@ void hir_statement_free(HirStatement *statement) {
         hir_expression_free(statement->as.local_binding.initializer);
         break;
     case HIR_STMT_RETURN:
-        hir_expression_free(statement->as.return_expression);
-        break;
+        hir_expression_free(statement->as.return_expression); break;
     case HIR_STMT_THROW:
-        hir_expression_free(statement->as.throw_expression);
-        break;
+        hir_expression_free(statement->as.throw_expression); break;
     case HIR_STMT_EXPRESSION:
-        hir_expression_free(statement->as.expression);
-        break;
-    case HIR_STMT_EXIT:
-        break;
+        hir_expression_free(statement->as.expression); break;
+    case HIR_STMT_EXIT: break;
+    case HIR_STMT_MANUAL:
+        hir_block_free(statement->as.manual.body); break;
     }
 
     free(statement);

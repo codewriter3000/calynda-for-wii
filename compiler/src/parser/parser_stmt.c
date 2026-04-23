@@ -1,5 +1,6 @@
 #include "parser_internal.h"
 
+#include <string.h>
 bool parser_add_statement(Parser *parser, AstBlock *block,
                           AstStatement *statement) {
     if (ast_block_append_statement(block, statement)) {
@@ -135,6 +136,41 @@ AstStatement *parse_statement(Parser *parser) {
 
         if (!parser_consume(parser, TOK_SEMICOLON,
                             "Expected ';' after local binding statement.")) {
+            ast_statement_free(statement);
+            return NULL;
+        }
+
+        return statement;
+    }
+
+    if (parser_check(parser, TOK_MANUAL)) {
+        AstStatement *statement = ast_statement_new(AST_STMT_MANUAL);
+        const Token  *start_token = parser_current_token(parser);
+
+        if (!statement) {
+            parser_set_oom_error(parser);
+            return NULL;
+        }
+        statement->source_span = parser_source_span(start_token);
+        parser_advance(parser); /* consume 'manual' */
+
+        /* Optional 'checked' contextual keyword */
+        if (parser_check(parser, TOK_IDENTIFIER)) {
+            const Token *t = parser_current_token(parser);
+            if (t->length == 7 && strncmp(t->start, "checked", 7) == 0) {
+                statement->as.manual.is_checked = true;
+                parser_advance(parser);
+            }
+        }
+
+        statement->as.manual.body = parse_block(parser);
+        if (!statement->as.manual.body) {
+            ast_statement_free(statement);
+            return NULL;
+        }
+
+        if (!parser_consume(parser, TOK_SEMICOLON,
+                            "Expected ';' after manual block.")) {
             ast_statement_free(statement);
             return NULL;
         }

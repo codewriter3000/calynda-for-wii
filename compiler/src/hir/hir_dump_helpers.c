@@ -170,6 +170,22 @@ bool hir_dump_statement(FILE *out, const HirStatement *statement, int indent) {
         hir_dump_write_span(out, statement->source_span);
         fputc('\n', out);
         return hir_dump_expression(out, statement->as.expression, indent + 2);
+    case HIR_STMT_MANUAL: {
+        size_t i;
+        hir_dump_write_indent(out, indent);
+        fprintf(out, "Manual checked=%s span=",
+                statement->as.manual.is_checked ? "true" : "false");
+        hir_dump_write_span(out, statement->source_span);
+        fputc('\n', out);
+        if (!statement->as.manual.body) return true;
+        for (i = 0; i < statement->as.manual.body->statement_count; i++) {
+            if (!hir_dump_statement(out,
+                    statement->as.manual.body->statements[i], indent + 2)) {
+                return false;
+            }
+        }
+        return true;
+    }
     }
 
     return false;

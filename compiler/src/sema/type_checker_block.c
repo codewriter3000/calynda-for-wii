@@ -187,8 +187,28 @@ bool tc_check_block(TypeChecker *checker, const AstBlock *block,
             }
             break;
 
-        case AST_STMT_MANUAL:
+        case AST_STMT_MANUAL: {
+            CheckedType mret; AstSourceSpan mspan;
+            if (!statement->as.manual.body) break;
+            if (!tc_check_block(checker, statement->as.manual.body,
+                                context, &mret, &mspan)) return false;
+            if (tc_source_span_is_valid(mspan)) {
+                if (!saw_return) {
+                    current_return_type = mret;
+                    first_return_span = mspan;
+                    saw_return = true;
+                } else {
+                    CheckedType mg;
+                    if (!tc_merge_return_types(current_return_type, mret, &mg)) {
+                        tc_set_error_at(checker, mspan, NULL,
+                            "Inconsistent return types in manual block.");
+                        return false;
+                    }
+                    current_return_type = mg;
+                }
+            }
             break;
+        }
         }
     }
 

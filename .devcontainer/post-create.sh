@@ -1,20 +1,28 @@
-#!/usr/bin/env bash
-set -e
+#!/usr/bin/env sh
+set -eu
 
-echo "=== Verifying devkitPPC toolchain ==="
+SCRIPT_DIR=$(CDPATH= cd -- "$(dirname "$0")" && pwd)
+REPO_ROOT=$(CDPATH= cd -- "$SCRIPT_DIR/.." && pwd)
+
+printf '=== Verifying devkitPPC toolchain ===\n'
 powerpc-eabi-gcc --version
 
-echo ""
-echo "=== Verifying Dolphin ==="
-dolphin-emu --version || echo "Dolphin installed (version flag may not be supported)"
+printf '\n=== Verifying Dolphin ===\n'
+dolphin-emu --version || printf 'Dolphin installed (version flag may not be supported)\n'
 
-echo ""
-echo "=== Building compiler + runtime libraries ==="
-make -C compiler calynda
+printf '\n=== Building compiler + runtime libraries ===\n'
+make -C "$REPO_ROOT/compiler" calynda
 
-echo ""
-echo "=== Running compiler tests ==="
-make -C compiler test
+printf '\n=== Running compiler tests ===\n'
+make -C "$REPO_ROOT/compiler" test
 
-echo ""
-echo "=== Dev container ready ==="
+printf '\n=== Building and installing decompile ===\n'
+sudo sh "$REPO_ROOT/decompiler/install.sh" --prefix /usr/local
+
+if ! command -v decompile >/dev/null 2>&1; then
+	printf 'error: decompile was not installed on PATH\n' >&2
+	exit 1
+fi
+
+printf 'decompile: %s\n' "$(command -v decompile)"
+printf '\n=== Dev container ready ===\n'

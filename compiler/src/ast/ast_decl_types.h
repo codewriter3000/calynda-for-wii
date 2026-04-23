@@ -93,6 +93,7 @@ typedef struct {
 typedef struct {
     AstParameterList parameters;
     AstBlock        *body;
+    bool             is_checked;
 } AstManualStatement;
 
 typedef enum {

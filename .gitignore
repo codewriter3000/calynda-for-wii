@@ -25,3 +25,7 @@ Thumbs.db
 
 vscode-calynda/*.vsix
 *.zip
+
+*.env
+
+decomp-workspace/**

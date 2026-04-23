@@ -77,6 +77,18 @@ bool c_emit_stmt(CEmitContext *ctx, const HirStatement *stmt) {
         }
         fputs(");\n", out);
         return true;
+
+    case HIR_STMT_MANUAL:
+        /* Emit as a bare C block; returns inside propagate to the enclosing
+           function.  'checked' blocks are identical at the C level. */
+        fputs("    {\n", out);
+        if (stmt->as.manual.body) {
+            if (!c_emit_block(ctx, stmt->as.manual.body)) {
+                return false;
+            }
+        }
+        fputs("    }\n", out);
+        return true;
     }
 
     return true;

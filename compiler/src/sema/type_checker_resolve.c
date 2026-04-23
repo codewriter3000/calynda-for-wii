@@ -120,8 +120,17 @@ const TypeCheckInfo *tc_resolve_symbol_info(TypeChecker *checker,
 
     switch (symbol->kind) {
     case SYMBOL_KIND_PACKAGE:
-    case SYMBOL_KIND_IMPORT:
         resolved_info = tc_type_check_info_make_external_value();
+        break;
+
+    case SYMBOL_KIND_IMPORT:
+        /* Wildcard-resolved members (name != NULL, is_wildcard_import set)
+           are callable bridge functions; bare module imports are values. */
+        if (symbol->is_wildcard_import && symbol->name != NULL) {
+            resolved_info = tc_type_check_info_make_external_callable();
+        } else {
+            resolved_info = tc_type_check_info_make_external_value();
+        }
         break;
 
     case SYMBOL_KIND_PARAMETER:

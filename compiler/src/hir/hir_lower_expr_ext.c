@@ -87,6 +87,46 @@ HirExpression *hr_lower_expr_complex(HirBuildContext *context,
                 return NULL;
             }
 
+            /* Wildcard-resolved member: rewrite to module.identifier member
+               access so the C emitter can route through the bridge. */
+            if (symbol->is_wildcard_import && symbol->name != NULL) {
+                HirExpression *mod_ref = hr_expression_new(HIR_EXPR_SYMBOL);
+                CheckedType ext_type;
+                if (!mod_ref) {
+                    hir_expression_free(hir_expression);
+                    hr_set_error(context, expression->source_span, NULL,
+                                 "Out of memory lowering wildcard import '%s'.",
+                                 expression->as.identifier);
+                    return NULL;
+                }
+                memset(&ext_type, 0, sizeof(ext_type));
+                ext_type.kind = CHECKED_TYPE_EXTERNAL;
+                mod_ref->type = ext_type;
+                mod_ref->as.symbol.kind = SYMBOL_KIND_IMPORT;
+                mod_ref->as.symbol.name = ast_copy_text(symbol->qualified_name);
+                mod_ref->as.symbol.source_span = expression->source_span;
+                mod_ref->source_span = expression->source_span;
+                if (!mod_ref->as.symbol.name) {
+                    hir_expression_free(mod_ref);
+                    hir_expression_free(hir_expression);
+                    hr_set_error(context, expression->source_span, NULL,
+                                 "Out of memory lowering wildcard import '%s'.",
+                                 expression->as.identifier);
+                    return NULL;
+                }
+                hir_expression->kind = HIR_EXPR_MEMBER;
+                hir_expression->as.member.target = mod_ref;
+                hir_expression->as.member.member =
+                    ast_copy_text(expression->as.identifier);
+                if (!hir_expression->as.member.member) {
+                    hir_expression_free(hir_expression);
+                    hr_set_error(context, expression->source_span, NULL,
+                                 "Out of memory lowering wildcard member name.");
+                    return NULL;
+                }
+                return hir_expression;
+            }
+
             hir_expression->as.symbol.symbol = symbol;
             hir_expression->as.symbol.name = ast_copy_text(expression->as.identifier);
             hir_expression->as.symbol.kind = symbol->kind;

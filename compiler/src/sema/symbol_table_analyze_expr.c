@@ -4,6 +4,53 @@
 #include <stdlib.h>
 #include <string.h>
 
+/* Try to resolve identifier from a wildcard import.  Returns a newly
+   created synthetic SYMBOL_KIND_IMPORT symbol on success, or NULL if no
+   wildcard import covers it.  The returned symbol is owned by the table's
+   imports list. */
+static const Symbol *st_try_wildcard_resolve(SymbolTable *table,
+                                              Scope *scope,
+                                              const char *identifier) {
+    size_t i;
+    const char *dot;
+    char *module_alias;
+
+    for (i = 0; i < table->import_count; i++) {
+        Symbol *sentinel = table->imports[i];
+        Symbol *syn;
+
+        if (!sentinel || !sentinel->is_wildcard_import) {
+            continue;
+        }
+
+        /* Extract the last path segment (module alias) as qualified_name
+           for the synthetic symbol so the HIR can emit __cal_<alias>. */
+        dot = strrchr(sentinel->qualified_name, '.');
+        module_alias = dot ? ast_copy_text(dot + 1)
+                           : ast_copy_text(sentinel->qualified_name);
+        if (!module_alias) {
+            return NULL;
+        }
+
+        syn = st_symbol_new(table, SYMBOL_KIND_IMPORT,
+                            identifier, module_alias,
+                            NULL, false, false, false, false, false,
+                            sentinel->declaration_span, sentinel->declaration,
+                            scope);
+        free(module_alias);
+        if (!syn) {
+            return NULL;
+        }
+        syn->is_wildcard_import = true;
+        if (!st_imports_append(table, syn)) {
+            st_symbol_free(syn);
+            return NULL;
+        }
+        return syn;
+    }
+    return NULL;
+}
+
 bool st_analyze_expression(SymbolTable *table, const AstExpression *expression,
                            Scope *scope) {
     size_t i;
@@ -31,6 +78,11 @@ bool st_analyze_expression(SymbolTable *table, const AstExpression *expression,
         {
             const Symbol *resolved = symbol_table_lookup(table, scope,
                                                          expression->as.identifier);
+
+            if (!resolved) {
+                resolved = st_try_wildcard_resolve(table, scope,
+                                                   expression->as.identifier);
+            }
 
             if (resolved) {
                 return st_resolutions_append(table, expression, scope, resolved);

@@ -118,15 +118,30 @@ bool st_add_import_symbols(SymbolTable *table, const AstProgram *program) {
             break;
         }
 
-        case AST_IMPORT_WILDCARD:
-            /* Wildcard imports bind names lazily at resolution time.
-               Ambiguity detection across multiple wildcard imports
-               requires a module loader to know each module's exported
-               names.  Once a module loader exists, duplicate exported
-               names from different wildcard imports must be flagged as
-               compile errors per the V2 ambiguity spec. */
-            free(qualified_name);
+        case AST_IMPORT_WILDCARD: {
+            /* Store a wildcard sentinel so HIR lowering can find the import
+               and so that identifiers from this module can be resolved lazily
+               in symbol_table_analyze_expr.c.  The sentinel has name=NULL so
+               symbol_table_find_import() never matches it directly; only the
+               is_wildcard_import flag is used to detect it during lookup. */
+            Symbol *sentinel = st_symbol_new(table, SYMBOL_KIND_IMPORT,
+                                             NULL, qualified_name,
+                                             NULL, false, false,
+                                             false, false, false,
+                                             imp->module_name.tail_span,
+                                             imp, table->root_scope);
+            if (!sentinel) {
+                free(qualified_name);
+                return false;
+            }
+            sentinel->is_wildcard_import = true;
+            if (!st_imports_append(table, sentinel)) {
+                st_symbol_free(sentinel);
+                free(qualified_name);
+                return false;
+            }
             break;
+        }
 
         case AST_IMPORT_SELECTIVE: {
             size_t j;
